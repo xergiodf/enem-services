@@ -84,7 +84,7 @@ public class UsuariosRest {
 
                 Usuarios usuarios = new Usuarios();
                 usuarios.setEstado("NOACTIVO");
-                usuarios.setPassword(dto.getPasword());
+                usuarios.setPassword(dto.getPassword());
                 usuarios.setUsername(dto.getUsername());
                 em.persist(usuarios);
                 log.info("Usuarios creado: " + usuarios.getUsername());
