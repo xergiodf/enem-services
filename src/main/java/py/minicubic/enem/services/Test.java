@@ -10,5 +10,6 @@ package py.minicubic.enem.services;
  * @author hectorvillalba
  */
 public class Test {
+    private String valor;
     
 }
