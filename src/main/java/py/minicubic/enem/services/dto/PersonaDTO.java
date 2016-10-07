@@ -14,6 +14,7 @@ import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlRootElement;
 import lombok.Getter;
 import lombok.Setter;
+import py.minicubic.enem.services.model.Ciudad;
 import py.minicubic.enem.services.model.Usuarios;
 
 /**
@@ -24,10 +25,6 @@ import py.minicubic.enem.services.model.Usuarios;
 @XmlAccessorType(XmlAccessType.FIELD)
 public class PersonaDTO<T> {
 
-    @Getter
-    @Setter
-    private Long idpersona;
-  
     @Getter
     @Setter
     private String nombres;
@@ -76,5 +73,13 @@ public class PersonaDTO<T> {
     @Setter
     private String pasword;
     
+    @Getter
+    @Setter
+    private Ciudad ciudad;
+    
+    @Getter
+    @Setter
+    private String genero;
+           
 
 }

@@ -36,21 +36,19 @@ public class UsuariosController {
         return null;
     }
     
-    public List<Persona> getSponsor(String user){
+    public List<Usuarios> getSponsor(String user){
         try {
-            Usuarios usuarios = (Usuarios) em.createQuery("select u from Usuarios u where u.username like :username ")
+                return em.createQuery("select u from Usuarios u where u.username like :username ")
                     .setParameter("username", user)
-                    .getSingleResult();
-            
-            return em.createQuery("select p from Persona p where p.usuario.idusuario = :id")
-                    .setParameter("id", usuarios.getIdUsuario())
                     .getResultList();
+            
+             
         } catch (Exception e) {
             return null;
         }
     }
     
-    public List<Usuarios> getListaNoActivos(){
+        public List<Usuarios> getListaNoActivos(){
         try {
             return em.createQuery("select u from Usuarios u where u.estado = 'NOACTIVO' ").getResultList();
         } catch (Exception e) {

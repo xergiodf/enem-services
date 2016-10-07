@@ -45,7 +45,7 @@ public class Persona implements Serializable {
     @Column(name = "nrodocumento")
     @Getter
     @Setter
-    private String nroDocumento;
+    private Long nroDocumento;
     
     @Column(name = "fechanacimiento")
     @Getter
@@ -82,6 +82,10 @@ public class Persona implements Serializable {
     @Setter
     private Long idSponsor;
     
+    @Column(name = "genero")
+    @Getter
+    @Setter
+    private String genero;
     
     @ManyToOne
     @JoinColumn(name = "idusuario" ,referencedColumnName = "idusuario")
@@ -89,4 +93,9 @@ public class Persona implements Serializable {
     @Setter
     private Usuarios usuario;
     
+    @ManyToOne
+    @JoinColumn(name = "idciudad" ,referencedColumnName = "idCiudad")
+    @Getter
+    @Setter
+    private Ciudad ciudad;
 }

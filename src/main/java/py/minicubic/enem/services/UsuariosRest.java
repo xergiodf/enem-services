@@ -74,7 +74,7 @@ public class UsuariosRest {
         ResponseData<Usuarios> response = new ResponseData<>();
         try {
                 log.info("*** Registrar Usuario ***");
-                List<Persona> lista = controller.getSponsor(dto.getIdSponsor());
+                List<Usuarios> lista = controller.getSponsor(dto.getIdSponsor());
                 if(lista.isEmpty()){
                     log.warning("Sponsor invalido");
                     response.setCodigo(301);
@@ -91,10 +91,18 @@ public class UsuariosRest {
 
                 Persona persona = new Persona();
                 persona.setNombres(dto.getNombres());
+                persona.setNroDocumento(Long.parseLong(dto.getNroDocumento()));
                 persona.setApellidos(dto.getApellidos());
                 persona.setCelular(dto.getCelular());
+                persona.setTelefono(dto.getTelefono());
+                persona.setRuc(dto.getRuc());
+                persona.setGenero(dto.getGenero());
+                persona.setDireccion(dto.getDireccion());
                 persona.setEmail(dto.getEmail());
                 persona.setFechaNacimiento(dto.getFechaNacimiento());
+                persona.setUsuario(usuarios);
+                persona.setCiudad(dto.getCiudad());
+                persona.setIdSponsor(lista.get(0).getIdUsuario());
                 em.persist(persona);
                 log.info("Persona creada: " + persona.getNombres());
                  
@@ -104,7 +112,7 @@ public class UsuariosRest {
         } catch (Exception e) {
                 log.warning(e.getMessage());
                 response.setCodigo(400);
-                response.setMensaje("Ocurrio un error al registrar Usuarios");
+                response.setMensaje(e.getMessage());
         }
         return response;
     }
