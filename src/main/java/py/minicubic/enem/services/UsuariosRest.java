@@ -5,6 +5,7 @@
  */
 package py.minicubic.enem.services;
 
+import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.logging.Logger;
 import javax.ejb.Singleton;
@@ -21,6 +22,7 @@ import py.minicubic.enem.services.dto.PersonaDTO;
 import py.minicubic.enem.services.dto.ResponseData;
 import py.minicubic.enem.services.dto.UsuariosDTO;
 import py.minicubic.enem.services.ejb.UsuariosController;
+import py.minicubic.enem.services.model.Ciudad;
 import py.minicubic.enem.services.model.Persona;
 import py.minicubic.enem.services.model.Usuarios;
 
@@ -74,7 +76,7 @@ public class UsuariosRest {
         ResponseData<Usuarios> response = new ResponseData<>();
         try {
                 log.info("*** Registrar Usuario ***");
-                List<Usuarios> lista = controller.getSponsor(dto.getIdSponsor());
+                List<Usuarios> lista = controller.getSponsor(dto.getSponsorUsername());
                 if(lista.isEmpty()){
                     log.warning("Sponsor invalido");
                     response.setCodigo(301);
@@ -99,10 +101,15 @@ public class UsuariosRest {
                 persona.setGenero(dto.getGenero());
                 persona.setDireccion(dto.getDireccion());
                 persona.setEmail(dto.getEmail());
-                persona.setFechaNacimiento(dto.getFechaNacimiento());
+                
+                SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");                
+                persona.setFechaNacimiento(sdf.parse(dto.getFechaNacimiento()));
                 persona.setUsuario(usuarios);
-                persona.setCiudad(dto.getCiudad());
+                
+                Ciudad ciudad = new Ciudad();
+                ciudad.setIdCiudad(Long.valueOf(dto.getIdCiudad()));
                 persona.setIdSponsor(lista.get(0).getIdUsuario());
+                
                 em.persist(persona);
                 log.info("Persona creada: " + persona.getNombres());
                  
@@ -110,7 +117,7 @@ public class UsuariosRest {
                 response.setMensaje("Success");
                 response.setData(usuarios);
         } catch (Exception e) {
-                log.warning(e.getMessage());
+                e.printStackTrace();
                 response.setCodigo(400);
                 response.setMensaje(e.getMessage());
         }

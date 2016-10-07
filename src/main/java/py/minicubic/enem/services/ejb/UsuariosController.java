@@ -7,10 +7,8 @@ package py.minicubic.enem.services.ejb;
 
 import java.util.List;
 import javax.ejb.Stateless;
-import javax.persistence.Entity;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
-import py.minicubic.enem.services.model.Persona;
 import py.minicubic.enem.services.model.Usuarios;
 
 /**
@@ -41,8 +39,6 @@ public class UsuariosController {
                 return em.createQuery("select u from Usuarios u where u.username like :username ")
                     .setParameter("username", user)
                     .getResultList();
-            
-             
         } catch (Exception e) {
             return null;
         }

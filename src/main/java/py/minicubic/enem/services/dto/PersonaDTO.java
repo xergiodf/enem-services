@@ -39,7 +39,7 @@ public class PersonaDTO<T> {
     
     @Getter
     @Setter
-    private Date fechaNacimiento;
+    private String fechaNacimiento;
     
     @Getter
     @Setter
@@ -63,7 +63,7 @@ public class PersonaDTO<T> {
     
     @Getter
     @Setter
-    private String idSponsor;
+    private String sponsorUsername;
     
     @Getter
     @Setter
@@ -75,7 +75,7 @@ public class PersonaDTO<T> {
     
     @Getter
     @Setter
-    private Ciudad ciudad;
+    private String idCiudad;
     
     @Getter
     @Setter
