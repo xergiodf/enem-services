@@ -71,7 +71,7 @@ public class PersonaDTO<T> {
     
     @Getter
     @Setter
-    private String pasword;
+    private String password;
     
     @Getter
     @Setter
