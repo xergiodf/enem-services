@@ -9,6 +9,7 @@ import java.util.List;
 import javax.ejb.Stateless;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
+import py.minicubic.enem.services.model.Persona;
 import py.minicubic.enem.services.model.Usuarios;
 
 /**
@@ -36,7 +37,7 @@ public class UsuariosController {
     
     public List<Usuarios> getSponsor(String user){
         try {
-                return em.createQuery("select u from Usuarios u where u.username like :username ")
+               return em.createQuery("select u from Usuarios u where u.username like :username ")
                     .setParameter("username", user)
                     .getResultList();
         } catch (Exception e) {
@@ -44,9 +45,25 @@ public class UsuariosController {
         }
     }
     
-        public List<Usuarios> getListaNoActivos(){
+    
+    public List<Persona> getPersona(Long id){
+        return em.createQuery("select p from persona p where p.usuario.idUsuario = :id")
+                            .setParameter("id", id)
+                            .getResultList();
+    }
+    
+    public List<Usuarios> getListaNoActivos(){
         try {
-            return em.createQuery("select u from Usuarios u where u.estado = 'NOACTIVO' ").getResultList();
+            return em.createQuery("select u from Usuarios u where u.estado = 'NOACTIVO' order by u.idUsuario ").getResultList();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+    
+    public List<Usuarios> getListaActivos(){
+        try {
+            return em.createQuery("select u from Usuarios u where u.estado = 'ACTIVO' order by u.idUsuario ").getResultList();
         } catch (Exception e) {
             e.printStackTrace();
         }

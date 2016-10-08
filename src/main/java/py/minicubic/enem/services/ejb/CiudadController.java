@@ -25,10 +25,22 @@ public class CiudadController {
     
     public List<Ciudad> listaCiudad(){
         try {
-            return em.createQuery("select c from ciudad c").getResultList();
+            return em.createQuery("select c from ciudad c order by c.nombre").getResultList();
         } catch (Exception e) {
             e.printStackTrace();
         }
         return null;
+    }
+    
+    
+    public Ciudad getCiudad(Long id){
+        try {
+           Ciudad ciudad = (Ciudad) em.createQuery("select c from ciudad c where c.idCiudad = :id")
+                .setParameter("id", id)
+                .getSingleResult();
+        return ciudad;
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

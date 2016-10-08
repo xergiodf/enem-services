@@ -21,8 +21,10 @@ import javax.ws.rs.core.MediaType;
 import py.minicubic.enem.services.dto.PersonaDTO;
 import py.minicubic.enem.services.dto.ResponseData;
 import py.minicubic.enem.services.dto.UsuariosDTO;
+import py.minicubic.enem.services.ejb.CiudadController;
 import py.minicubic.enem.services.ejb.UsuariosController;
 import py.minicubic.enem.services.model.Ciudad;
+import py.minicubic.enem.services.model.Franquiciado;
 import py.minicubic.enem.services.model.Persona;
 import py.minicubic.enem.services.model.Usuarios;
 
@@ -37,6 +39,9 @@ public class UsuariosRest {
     
     @Inject
     private UsuariosController controller;
+    @Inject
+    private CiudadController ciudadController;
+    
     @PersistenceContext
     private EntityManager em;
     Logger log = Logger.getLogger("UsuariosRest");
@@ -75,6 +80,8 @@ public class UsuariosRest {
     public ResponseData<Usuarios> registrarUsuario(PersonaDTO dto){
         ResponseData<Usuarios> response = new ResponseData<>();
         try {
+                
+                Persona sponsor = null;
                 log.info("*** Registrar Usuario ***");
                 List<Usuarios> lista = controller.getSponsor(dto.getSponsorUsername());
                 if(lista.isEmpty()){
@@ -82,6 +89,31 @@ public class UsuariosRest {
                     response.setCodigo(301);
                     response.setMensaje("No existe el sponsor ingresado");
                     return response;
+                }else{
+                    List<Persona> listaSponsor = controller.getPersona(lista.get(0).getIdUsuario());
+                    sponsor = listaSponsor.get(0);
+                }
+                
+                if (dto.getNombres() == null || dto.getNombres().isEmpty() ||
+                    dto.getNroDocumento() == null || dto.getNroDocumento().isEmpty() ||
+                    dto.getDireccion() == null || dto.getDireccion().isEmpty() ||
+                    dto.getEmail() == null || dto.getEmail().isEmpty() ||
+                    dto.getPassword() == null || dto.getPassword().isEmpty() ||
+                    dto.getFechaNacimiento() == null || dto.getFechaNacimiento().isEmpty() || 
+                    dto.getSponsorUsername() == null || dto.getSponsorUsername().isEmpty() ||
+                    dto.getApellidos() == null && dto.getApellidos().isEmpty()) {
+                    log.warning("Algunos campos son requeridos");
+                    response.setCodigo(301);
+                    response.setMensaje("Campos requeridos vacios");
+                    return response;
+                }
+                
+                
+                Ciudad ciudad = ciudadController.getCiudad(Long.valueOf(dto.getIdCiudad()));
+                if (ciudad == null) {
+                    log.warning("Ciudad invalida");
+                    response.setCodigo(302);
+                    response.setMensaje("Ciudad invalida");
                 }
 
                 Usuarios usuarios = new Usuarios();
@@ -105,19 +137,23 @@ public class UsuariosRest {
                 SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");                
                 persona.setFechaNacimiento(sdf.parse(dto.getFechaNacimiento()));
                 persona.setUsuario(usuarios);
-                
-                Ciudad ciudad = new Ciudad();
-                ciudad.setIdCiudad(Long.valueOf(dto.getIdCiudad()));
-                persona.setIdSponsor(lista.get(0).getIdUsuario());
+                persona.setCiudad(ciudad);
+
                 
                 em.persist(persona);
                 log.info("Persona creada: " + persona.getNombres());
+                
+                Franquiciado franquiciado = new Franquiciado();
+                franquiciado.setNumeracion(1);
+                franquiciado.setPersona(persona);
+                franquiciado.setSponsor(sponsor);
+                em.persist(franquiciado);
+                log.info("Franquiciado creado con exito...");
                  
                 response.setCodigo(200);
                 response.setMensaje("Success");
                 response.setData(usuarios);
         } catch (Exception e) {
-                e.printStackTrace();
                 response.setCodigo(400);
                 response.setMensaje(e.getMessage());
         }
@@ -128,6 +164,23 @@ public class UsuariosRest {
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public ResponseData<List<Usuarios>> getUsuariosNoActivos(){
+        ResponseData<List<Usuarios>> response = new ResponseData<>();
+        try {
+            response.setCodigo(200);
+            response.setMensaje("Success");
+            response.setData(controller.getListaNoActivos());
+            return response;
+        } catch (Exception e) {
+            response.setCodigo(401);
+            response.setMensaje("Ocurrio un error al listar usuarios no activos");
+        }
+       return response;
+    }
+    
+    @Path("listaactivos")
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public ResponseData<List<Usuarios>> getUsuariosActivos(){
         ResponseData<List<Usuarios>> response = new ResponseData<>();
         try {
             response.setCodigo(200);
