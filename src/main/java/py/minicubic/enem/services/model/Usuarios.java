@@ -57,5 +57,9 @@ public class Usuarios implements Serializable {
     @Setter
     private Date fechaExpiracion;
 
-    
+    @Column(name = "fecharegistro", columnDefinition="TIMESTAMP DEFAULT CURRENT_TIMESTAMP", insertable = false, updatable = false)
+    @Temporal(TemporalType.TIMESTAMP)
+    @Getter
+    @Setter
+    private Date fechaRegistro;
 }

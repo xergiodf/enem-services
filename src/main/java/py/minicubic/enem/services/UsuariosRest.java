@@ -5,7 +5,9 @@
  */
 package py.minicubic.enem.services;
 
+import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
@@ -20,6 +22,8 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
+import py.minicubic.enem.services.annotations.LoggedIn;
+import py.minicubic.enem.services.annotations.Secured;
 import py.minicubic.enem.services.dto.PersonaDTO;
 import py.minicubic.enem.services.dto.ResponseData;
 import py.minicubic.enem.services.dto.UsuariosDTO;
@@ -29,6 +33,7 @@ import py.minicubic.enem.services.model.Ciudad;
 import py.minicubic.enem.services.model.Franquiciado;
 import py.minicubic.enem.services.model.Persona;
 import py.minicubic.enem.services.model.Usuarios;
+import py.minicubic.enem.services.util.Util;
 
 /**
  *
@@ -38,6 +43,9 @@ import py.minicubic.enem.services.model.Usuarios;
 @Singleton
 public class UsuariosRest {
 
+    @Inject
+    @LoggedIn
+    Usuarios usuarioLogueado;
     @Inject
     private UsuariosController controller;
     @Inject
@@ -51,8 +59,8 @@ public class UsuariosRest {
     @POST
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public ResponseData<List<Usuarios>> obtenerUsuario(UsuariosDTO dto) {
-        ResponseData<List<Usuarios>> response = new ResponseData<>();
+    public ResponseData<String> obtenerUsuario(UsuariosDTO dto) {
+        ResponseData<String> response = new ResponseData<>();
         log.info("*** Obtener Ususario ***");
         log.info("Username: " + dto.getUsuario());
         try {
@@ -61,6 +69,7 @@ public class UsuariosRest {
                 log.info("Login satisfactorio...");
                 response.setCodigo(200);
                 response.setMensaje("Success");
+                response.setData(Util.createToken(lista.iterator().next().getIdUsuario()));
             } else {
                 log.warning("Datos invalidos");
                 response.setCodigo(401);
@@ -199,6 +208,7 @@ public class UsuariosRest {
 
     @Path("listanoactivos")
     @GET
+    @Secured
     @Produces(MediaType.APPLICATION_JSON)
     public ResponseData<List<Usuarios>> getUsuariosNoActivos() {
         ResponseData<List<Usuarios>> response = new ResponseData<>();
@@ -216,6 +226,7 @@ public class UsuariosRest {
 
     @Path("listaactivos")
     @GET
+    @Secured
     @Produces(MediaType.APPLICATION_JSON)
     public ResponseData<List<Usuarios>> getUsuariosActivos() {
         ResponseData<List<Usuarios>> response = new ResponseData<>();
@@ -230,4 +241,63 @@ public class UsuariosRest {
         }
         return response;
     }
+    
+    @Path("lista")
+    @GET
+    @Secured
+    @Produces(MediaType.APPLICATION_JSON)
+    public ResponseData<List<UsuariosDTO>> getUsuarios() {
+        ResponseData<List<UsuariosDTO>> response = new ResponseData<>();
+        try {
+            response.setCodigo(200);
+            response.setMensaje("Success");
+            
+            UsuariosDTO usuarioResponse = null;
+            List<UsuariosDTO> usuariosResponse = new ArrayList<>();
+            DateFormat df = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+            
+            for ( Persona persona : controller.getListPersonaUsuarios() ) {
+                usuarioResponse = new UsuariosDTO();
+                usuarioResponse.setNombreCompleto(persona.getNombres() + " " + persona.getApellidos());
+                usuarioResponse.setActivo(!persona.getUsuario().getEstado().equals("NOACTIVO"));
+                usuarioResponse.setFechaRegistro(df.format(persona.getUsuario().getFechaRegistro()));
+                usuarioResponse.setUsuario(persona.getUsuario().getUsername());
+                
+                usuariosResponse.add(usuarioResponse);
+            }
+            
+            response.setData(usuariosResponse);
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setCodigo(401);
+            response.setMensaje("Ocurrio un error al listar usuarios");
+        }
+        return response;
+    }
+    
+    @Path("cambiarEstadoUsuario")
+    @GET
+    @Secured
+    @Produces(MediaType.APPLICATION_JSON)
+    public ResponseData changeEstadoUsuario() {
+        ResponseData<List<UsuariosDTO>> response = new ResponseData<>();
+        try {
+            response.setCodigo(200);
+            response.setMensaje("Success");
+            
+            Usuarios usuario = controller.getUsuario(usuarioLogueado.getIdUsuario());
+            usuario.setEstado((usuario.getEstado().equals("NOACTIVO")) ? "ACTIVO" : "NOACTIVO");
+            
+            em.merge(usuario);
+            
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setCodigo(401);
+            response.setMensaje("Ocurrio un error al cambiar el estado del usuario");
+        }
+        return response;
+    }
+    
 }

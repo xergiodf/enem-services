@@ -27,4 +27,23 @@ public class UsuariosDTO<T> {
     @Setter
     private String password;
 
+    @Getter
+    @Setter
+    private boolean activo;
+    
+    @Getter
+    @Setter
+    private String fechaRegistro;
+    
+    @Getter
+    @Setter
+    private String avatar;
+    
+    @Getter
+    @Setter
+    private String nombreCompleto;
+    
+    @Getter
+    @Setter
+    private boolean admin;
 }
