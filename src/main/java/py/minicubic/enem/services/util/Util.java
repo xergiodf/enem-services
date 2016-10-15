@@ -6,6 +6,7 @@ import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.SignatureException;
+import java.security.SecureRandom;
 import java.util.Date;
 import javax.xml.bind.DatatypeConverter;
 
@@ -77,5 +78,19 @@ public class Util {
                 .parseClaimsJws(token).getBody();
 
         return claims;
+    }
+
+    /**
+     * Genera un random hash de longitud variable
+     * @param len
+     * @return 
+     */
+    public static String randomString(int len) {
+        SecureRandom rnd = new SecureRandom();
+        StringBuilder sb = new StringBuilder(len);
+        for (int i = 0; i < len; i++) {
+            sb.append(Constants.ABab.charAt(rnd.nextInt(Constants.ABab.length())));
+        }
+        return sb.toString();
     }
 }

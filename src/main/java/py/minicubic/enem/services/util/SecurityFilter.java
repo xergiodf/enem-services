@@ -10,8 +10,6 @@ import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.ext.Provider;
 import javax.ws.rs.Priorities;
-import javax.ws.rs.container.ContainerResponseContext;
-import javax.ws.rs.container.ContainerResponseFilter;
 import py.minicubic.enem.services.annotations.LoggedIn;
 import py.minicubic.enem.services.annotations.Secured;
 

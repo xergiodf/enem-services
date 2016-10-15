@@ -26,6 +26,10 @@ public class UsuariosDTO<T> {
     @Getter
     @Setter
     private String password;
+    
+    @Getter
+    @Setter
+    private String newPassword;
 
     @Getter
     @Setter
@@ -46,4 +50,8 @@ public class UsuariosDTO<T> {
     @Getter
     @Setter
     private boolean admin;
+    
+    @Getter
+    @Setter
+    private String tokenCambioPass;
 }

@@ -17,4 +17,10 @@ public final class Constants {
     
     public static final String BOOLEAN_TRUE = "SI";
     public static final String BOOLEAN_FALSE = "NO";
+    
+    public static final String ABab = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    
+    public static final String ESTADO_INACTIVO = "INACTIVO";
+    public static final String ESTADO_SINCONFIRMAR = "SINCONFIRMAR";
+    public static final String ESTADO_ACTIVO = "ACTIVO";
 }

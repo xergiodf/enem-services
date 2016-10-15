@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package py.minicubic.enem.services;
 
 import java.text.DateFormat;
@@ -11,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
+import java.util.UUID;
 import java.util.logging.Logger;
 import javax.ejb.Singleton;
 import javax.inject.Inject;
@@ -20,6 +16,7 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import py.minicubic.enem.services.annotations.LoggedIn;
@@ -33,6 +30,7 @@ import py.minicubic.enem.services.model.Ciudad;
 import py.minicubic.enem.services.model.Franquiciado;
 import py.minicubic.enem.services.model.Persona;
 import py.minicubic.enem.services.model.Usuarios;
+import py.minicubic.enem.services.util.Constants;
 import py.minicubic.enem.services.util.Util;
 
 /**
@@ -63,18 +61,43 @@ public class UsuariosRest {
         ResponseData<String> response = new ResponseData<>();
         log.info("*** Obtener Ususario ***");
         log.info("Username: " + dto.getUsuario());
+
         try {
-            List<Usuarios> lista = controller.getUsuarios(dto.getUsuario(), dto.getPassword());
-            if (lista != null && !lista.isEmpty()) {
-                log.info("Login satisfactorio...");
-                response.setCodigo(200);
-                response.setMensaje("Success");
-                response.setData(Util.createToken(lista.iterator().next().getIdUsuario()));
+
+            Usuarios usuario = null;
+            // Si existe un token en el request, llego desde el mail
+            if (!Util.isEmpty(dto.getTokenCambioPass())) {
+                
+                // Verificamos que sea valido el token
+                usuario = controller.getUsuarioByUsernameByCambioPassToken(dto.getUsuario(), dto.getTokenCambioPass());
+                
+                if ( Util.isEmpty(usuario) ) {
+                    log.warning("No existe token en la base de datos. Ya fue utilizado.");
+                    response.setCodigo(401);
+                    response.setMensaje("No autorizado, autenticacion rechazada");
+                    return response;
+                }
+                
+                // Limpiamos el token
+                usuario.setTokenCambioPass("");
+                em.merge(usuario);
+
             } else {
-                log.warning("Datos invalidos");
-                response.setCodigo(401);
-                response.setMensaje("No autorizado, autenticacion rechazada");
+                List<Usuarios> lista = controller.getUsuarios(dto.getUsuario(), dto.getPassword());
+                if (lista.isEmpty()) {
+                    log.warning("Datos invalidos");
+                    response.setCodigo(401);
+                    response.setMensaje("No autorizado, autenticacion rechazada");
+                    return response;
+                }
+                
+                usuario = lista.iterator().next();
             }
+
+            log.info("Login satisfactorio...");
+            response.setCodigo(200);
+            response.setMensaje("Success");
+            response.setData(Util.createToken(usuario.getIdUsuario()));
         } catch (Exception e) {
             log.warning(e.getMessage());
             response.setCodigo(401);
@@ -91,11 +114,16 @@ public class UsuariosRest {
         ResponseData<Usuarios> response = new ResponseData<>();
         try {
 
+            // Iniciar transacción
+            em.getTransaction().begin();
+
             // Validación de Sponsor
             Persona sponsor = null;
-            log.info("*** Registrar Usuario ***");
-            List<Usuarios> lista = controller.getSponsor(dto.getSponsorUsername());
+            log.info("*** Registrando Usuario ***");
+            List<Usuarios> lista = controller.getUsuarioByUsername(dto.getSponsorUsername());
+
             if (lista.isEmpty()) {
+                em.getTransaction().rollback();
                 log.warning("Sponsor invalido");
                 response.setCodigo(301);
                 response.setMensaje("No existe el sponsor ingresado");
@@ -115,6 +143,8 @@ public class UsuariosRest {
                     || dto.getSponsorUsername() == null || dto.getSponsorUsername().isEmpty() // Sponsor
                     || dto.getApellidos() == null || dto.getApellidos().isEmpty() // Apellido
                     || dto.getGenero() == null || dto.getGenero().isEmpty()) {                  // Genero
+
+                em.getTransaction().rollback();
                 log.warning("Algunos campos son requeridos");
                 response.setCodigo(301);
                 response.setMensaje("Campos requeridos: *Nombres *Nro. Documento *Direccion *Email *Password *Fecha Nacimiento *Sponsor *Apellido *Genero");
@@ -124,8 +154,11 @@ public class UsuariosRest {
             // Validacion de Ciudad
             Ciudad ciudad = null;
             if (dto.getIdCiudad() != null || !dto.getIdCiudad().isEmpty()) {
+
                 ciudad = ciudadController.getCiudad(Long.valueOf(dto.getIdCiudad()));
                 if (ciudad == null) {
+
+                    em.getTransaction().rollback();
                     log.warning("Ciudad invalida");
                     response.setCodigo(302);
                     response.setMensaje("Ciudad invalida");
@@ -136,6 +169,24 @@ public class UsuariosRest {
             // Validación de Edad
             SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
             Date fechaNacimiento = sdf.parse(dto.getFechaNacimiento());
+
+            // Validación de usuario
+            if (controller.getUsuarioByUsername(dto.getUsername()).isEmpty()) {
+                em.getTransaction().rollback();
+                log.warning("Usuario ya existe en la base de datos");
+                response.setCodigo(303);
+                response.setMensaje("Usuario ya existe en la base de datos");
+                return response;
+            }
+
+            // Validación de email
+            if (controller.getPersonasByEmail(dto.getEmail()).isEmpty()) {
+                em.getTransaction().rollback();
+                log.warning("Email ya existe en la base de datos");
+                response.setCodigo(304);
+                response.setMensaje("Email ya existe en la base de datos");
+                return response;
+            }
 
             GregorianCalendar now = new GregorianCalendar();
             GregorianCalendar nacimiento = new GregorianCalendar();
@@ -163,9 +214,10 @@ public class UsuariosRest {
             }
 
             Usuarios usuarios = new Usuarios();
-            usuarios.setEstado("NOACTIVO");
+            usuarios.setEstado(Constants.ESTADO_SINCONFIRMAR);
             usuarios.setPassword(dto.getPassword());
             usuarios.setUsername(dto.getUsername());
+            usuarios.setTokenConfirmacionEmail(UUID.randomUUID().toString());
             em.persist(usuarios);
             log.info("Usuarios creado: " + usuarios.getUsername());
 
@@ -195,10 +247,13 @@ public class UsuariosRest {
             em.persist(franquiciado);
             log.info("Franquiciado creado con exito...");
 
+            em.getTransaction().commit();
+
             response.setCodigo(200);
             response.setMensaje("Success");
             response.setData(usuarios);
         } catch (Exception e) {
+            em.getTransaction().rollback();
             e.printStackTrace();
             response.setCodigo(400);
             response.setMensaje("Ocurrió un error en el servidor");
@@ -241,7 +296,7 @@ public class UsuariosRest {
         }
         return response;
     }
-    
+
     @Path("lista")
     @GET
     @Secured
@@ -251,21 +306,21 @@ public class UsuariosRest {
         try {
             response.setCodigo(200);
             response.setMensaje("Success");
-            
+
             UsuariosDTO usuarioResponse = null;
             List<UsuariosDTO> usuariosResponse = new ArrayList<>();
             DateFormat df = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
-            
-            for ( Persona persona : controller.getListPersonaUsuarios() ) {
+
+            for (Persona persona : controller.getListPersonaUsuarios()) {
                 usuarioResponse = new UsuariosDTO();
                 usuarioResponse.setNombreCompleto(persona.getNombres() + " " + persona.getApellidos());
                 usuarioResponse.setActivo(!persona.getUsuario().getEstado().equals("NOACTIVO"));
                 usuarioResponse.setFechaRegistro(df.format(persona.getUsuario().getFechaRegistro()));
                 usuarioResponse.setUsuario(persona.getUsuario().getUsername());
-                
+
                 usuariosResponse.add(usuarioResponse);
             }
-            
+
             response.setData(usuariosResponse);
             return response;
         } catch (Exception e) {
@@ -275,22 +330,32 @@ public class UsuariosRest {
         }
         return response;
     }
-    
-    @Path("cambiarEstadoUsuario")
+
+    @Path("cambiarEstadoUsuario/{userId}")
     @GET
     @Secured
     @Produces(MediaType.APPLICATION_JSON)
-    public ResponseData changeEstadoUsuario() {
+    public ResponseData cambiarEstadoUsuario(@PathParam(value = "userId") String userId) {
         ResponseData<List<UsuariosDTO>> response = new ResponseData<>();
         try {
+
+            // Verificar que el usuario logueado tiene permisos para hacer esto            
+            Usuarios usuario = controller.getUsuario(Long.valueOf(userId));
+
+            if (Util.isEmpty(usuario)) {
+                log.warning("No se encuentra usuario con id: " + userId);
+                response.setCodigo(305);
+                response.setMensaje("No se encuentra usuario con id: " + userId);
+                return response;
+            }
+
             response.setCodigo(200);
             response.setMensaje("Success");
-            
-            Usuarios usuario = controller.getUsuario(usuarioLogueado.getIdUsuario());
+
             usuario.setEstado((usuario.getEstado().equals("NOACTIVO")) ? "ACTIVO" : "NOACTIVO");
-            
+
             em.merge(usuario);
-            
+
             return response;
         } catch (Exception e) {
             e.printStackTrace();
@@ -299,5 +364,105 @@ public class UsuariosRest {
         }
         return response;
     }
-    
+
+    @Path("confirmarEmailUsuario/{username}/{token}")
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public ResponseData confirmarEmail(@PathParam(value = "username") String username,
+            @PathParam(value = "token") String token) {
+        ResponseData response = new ResponseData();
+
+        try {
+
+            // Verificar token de parámetro con el de la base de datos
+            Usuarios usuario = controller.getUsuarioByUsernameByEmailConfirmToken(username, token);
+
+            if (Util.isEmpty(usuario)) {
+                log.warning("Usuario no encontrado en base a los parámetros seleccionados");
+                response.setCodigo(306);
+                response.setMensaje("No existe la combinación usuario (" + username + ") y token (" + token + ")");
+            }
+
+            // Limpiar el hash
+            usuario.setTokenConfirmacionEmail("");
+            usuario.setEstado(Constants.ESTADO_INACTIVO);
+
+            em.merge(usuario);
+
+            response.setCodigo(200);
+            response.setMensaje("Se confirmó el email del usuario " + username);
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setCodigo(401);
+            response.setMensaje("Ocurrio un error al confirmar email del usuario: " + username);
+        }
+
+        return response;
+    }
+
+    @Path("cambiarContrasenha")
+    @POST
+    @Secured
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public ResponseData cambiarContrasenha(UsuariosDTO dto) {
+        ResponseData response = new ResponseData<>();
+
+        try {
+            // Verificamos que la contraseña anterior sea la misma
+            List<Usuarios> usuarioList = controller.getUsuarios(usuarioLogueado.getUsername(), dto.getPassword());
+
+            if (usuarioList.isEmpty()) {
+                log.warning("Contraseñas no coinciden");
+                response.setCodigo(307);
+                response.setMensaje("Las contraseñas no coinciden");
+                return response;
+            }
+
+            // Realizamos el cambio
+            usuarioLogueado.setPassword(dto.getNewPassword());
+            em.merge(usuarioLogueado);
+
+            response.setCodigo(200);
+            response.setMensaje("Contraseña cambiada correctamente");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setCodigo(401);
+            response.setMensaje("Ocurrio un error al cambiar la contraseña");
+        }
+
+        return response;
+    }
+
+    @Path("solicitarCambioContrasenha/{username}")
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public ResponseData solicitarCambioContrasenha(@PathParam(value = "username") String username) {
+        ResponseData response = new ResponseData<>();
+
+        try {
+
+            // Generar un token y actualizar en el usuario
+            List<Usuarios> usuarioList = controller.getUsuarioByUsername(username);
+
+            if (usuarioList.isEmpty()) {
+                log.warning("No existe el usuario " + username);
+                response.setCodigo(308);
+                response.setMensaje(username);
+            }
+
+            Usuarios usuario = usuarioList.iterator().next();
+            usuario.setTokenCambioPass(UUID.randomUUID().toString());
+            em.merge(usuario);
+
+            // Enviar un mail
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setCodigo(401);
+            response.setMensaje("Ocurrio un error al solicitar el cambio de contraseña del usuario " + username);
+        }
+
+        return response;
+    }
 }

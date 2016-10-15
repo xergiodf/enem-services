@@ -62,4 +62,16 @@ public class Usuarios implements Serializable {
     @Getter
     @Setter
     private Date fechaRegistro;
+    
+    @Basic
+    @Column(name="tokencambiopass")
+    @Getter
+    @Setter
+    private String tokenCambioPass;
+    
+    @Basic
+    @Column(name="tokenconfirmacionemail")
+    @Getter
+    @Setter
+    private String tokenConfirmacionEmail;
 }
