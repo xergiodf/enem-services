@@ -26,6 +26,7 @@ import py.minicubic.enem.services.dto.ResponseData;
 import py.minicubic.enem.services.dto.UsuariosDTO;
 import py.minicubic.enem.services.ejb.CiudadController;
 import py.minicubic.enem.services.ejb.UsuariosController;
+import py.minicubic.enem.services.mail.EnviarMail;
 import py.minicubic.enem.services.model.Ciudad;
 import py.minicubic.enem.services.model.Franquiciado;
 import py.minicubic.enem.services.model.Persona;
@@ -52,6 +53,9 @@ public class UsuariosRest {
     @PersistenceContext
     private EntityManager em;
     Logger log = Logger.getLogger("UsuariosRest");
+    
+    @Inject
+    private EnviarMail enviarMail;
 
     @Path("login")
     @POST
@@ -81,7 +85,6 @@ public class UsuariosRest {
                 // Limpiamos el token
                 usuario.setTokenCambioPass("");
                 em.merge(usuario);
-
             } else {
                 List<Usuarios> lista = controller.getUsuarios(dto.getUsuario(), dto.getPassword());
                 if (lista.isEmpty()) {
@@ -113,17 +116,12 @@ public class UsuariosRest {
     public ResponseData<Usuarios> registrarUsuario(PersonaDTO dto) {
         ResponseData<Usuarios> response = new ResponseData<>();
         try {
-
-            // Iniciar transacción
-            em.getTransaction().begin();
-
             // Validación de Sponsor
             Persona sponsor = null;
             log.info("*** Registrando Usuario ***");
             List<Usuarios> lista = controller.getUsuarioByUsername(dto.getSponsorUsername());
 
             if (lista.isEmpty()) {
-                em.getTransaction().rollback();
                 log.warning("Sponsor invalido");
                 response.setCodigo(301);
                 response.setMensaje("No existe el sponsor ingresado");
@@ -144,7 +142,6 @@ public class UsuariosRest {
                     || dto.getApellidos() == null || dto.getApellidos().isEmpty() // Apellido
                     || dto.getGenero() == null || dto.getGenero().isEmpty()) {                  // Genero
 
-                em.getTransaction().rollback();
                 log.warning("Algunos campos son requeridos");
                 response.setCodigo(301);
                 response.setMensaje("Campos requeridos: *Nombres *Nro. Documento *Direccion *Email *Password *Fecha Nacimiento *Sponsor *Apellido *Genero");
@@ -157,8 +154,6 @@ public class UsuariosRest {
 
                 ciudad = ciudadController.getCiudad(Long.valueOf(dto.getIdCiudad()));
                 if (ciudad == null) {
-
-                    em.getTransaction().rollback();
                     log.warning("Ciudad invalida");
                     response.setCodigo(302);
                     response.setMensaje("Ciudad invalida");
@@ -171,8 +166,7 @@ public class UsuariosRest {
             Date fechaNacimiento = sdf.parse(dto.getFechaNacimiento());
 
             // Validación de usuario
-            if (controller.getUsuarioByUsername(dto.getUsername()).isEmpty()) {
-                em.getTransaction().rollback();
+            if (!controller.getUsuarioByUsername(dto.getUsername()).isEmpty()) {
                 log.warning("Usuario ya existe en la base de datos");
                 response.setCodigo(303);
                 response.setMensaje("Usuario ya existe en la base de datos");
@@ -180,8 +174,7 @@ public class UsuariosRest {
             }
 
             // Validación de email
-            if (controller.getPersonasByEmail(dto.getEmail()).isEmpty()) {
-                em.getTransaction().rollback();
+            if (!controller.getPersonasByEmail(dto.getEmail()).isEmpty()) {
                 log.warning("Email ya existe en la base de datos");
                 response.setCodigo(304);
                 response.setMensaje("Email ya existe en la base de datos");
@@ -207,7 +200,7 @@ public class UsuariosRest {
             }
 
             if (edad < 18) {
-                log.warning("Ciudad invalida");
+                log.warning("Edad invalida...");
                 response.setCodigo(303);
                 response.setMensaje("Edad invalida");
                 return response;
@@ -247,13 +240,15 @@ public class UsuariosRest {
             em.persist(franquiciado);
             log.info("Franquiciado creado con exito...");
 
-            em.getTransaction().commit();
-
+                
             response.setCodigo(200);
             response.setMensaje("Success");
             response.setData(usuarios);
+            List<String> emails = new ArrayList<>();
+            emails.add(persona.getEmail());
+            enviarMail.sendeEmail("Bienvenido " + usuarios.getUsername(), 
+                    "Usted ha sido registrado satisfactoriamente en ENEM, por favor ingrese a la pagina principal con su usuario y pass", emails);
         } catch (Exception e) {
-            em.getTransaction().rollback();
             e.printStackTrace();
             response.setCodigo(400);
             response.setMensaje("Ocurrió un error en el servidor");
@@ -435,10 +430,10 @@ public class UsuariosRest {
         return response;
     }
 
-    @Path("solicitarCambioContrasenha/{username}")
+    @Path("solicitarCambioContrasenha/{mail}")
     @GET
     @Produces(MediaType.APPLICATION_JSON)
-    public ResponseData solicitarCambioContrasenha(@PathParam(value = "username") String username) {
+    public ResponseData solicitarCambioContrasenha(@PathParam(value = "mail") String username) {
         ResponseData response = new ResponseData<>();
 
         try {

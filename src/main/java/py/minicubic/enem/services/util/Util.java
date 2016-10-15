@@ -20,13 +20,6 @@ public class Util {
         return (o == null) || ("".equals(o));
     }
 
-    /**
-     * Crea un token de autenticación
-     *
-     * @param subject
-     * @param name
-     * @return
-     */
     public static String createToken(Long id) {
 
         long nowMillis = System.currentTimeMillis();
@@ -43,13 +36,6 @@ public class Util {
         return builder.compact();
     }
 
-    /**
-     * Verifica el token
-     *
-     * @param token
-     * @return
-     * @throws SignatureException
-     */
     public static boolean verifyToken(String token) {
 
         boolean valid = true;
@@ -64,13 +50,6 @@ public class Util {
         return valid;
     }
 
-    /**
-     * Obtiene los claims del token
-     *
-     * @param token
-     * @return
-     * @throws SignatureException
-     */
     public static Claims getClaims(String token) throws SignatureException, ExpiredJwtException {
 
         Claims claims = Jwts.parser()
@@ -80,11 +59,6 @@ public class Util {
         return claims;
     }
 
-    /**
-     * Genera un random hash de longitud variable
-     * @param len
-     * @return 
-     */
     public static String randomString(int len) {
         SecureRandom rnd = new SecureRandom();
         StringBuilder sb = new StringBuilder(len);

@@ -23,4 +23,9 @@ public final class Constants {
     public static final String ESTADO_INACTIVO = "INACTIVO";
     public static final String ESTADO_SINCONFIRMAR = "SINCONFIRMAR";
     public static final String ESTADO_ACTIVO = "ACTIVO";
+    public static final String HOST_NAME_SMTP = "server1.hostipy.com";
+    public static final String PUERT0_SMTP = "465";
+    public static final String USER_NAME_SMTP = "info@enemedu.com";
+    public static final String PASS_SMTP = "SoyInfoEnem*";
+    
 }

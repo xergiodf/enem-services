@@ -26,6 +26,9 @@ public class SecurityFilter implements ContainerRequestFilter {
     @LoggedIn
     Event<Long> loggedInEvent;
     
+    @Inject
+    UsuarioProducer producer;
+    
     public void filter(ContainerRequestContext requestContext) throws IOException {
         
         // Get the HTTP Authorization header from the request

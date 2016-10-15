@@ -19,11 +19,6 @@ public class UsuariosController {
     @PersistenceContext
     EntityManager em;
 
-    /**
-     * Obtiene usuario en base al Id
-     * @param id
-     * @return 
-     */
     public Usuarios getUsuario(Long id) {
         try {
             return em.find(Usuarios.class, id);
@@ -33,13 +28,6 @@ public class UsuariosController {
         return null;
     }
 
-    /**
-     * Obtiene una lista de usuarios en base a un user y password
-     * Si existe, debería de ser solamente 1 registro
-     * @param user
-     * @param pass
-     * @return 
-     */
     public List<Usuarios> getUsuarios(String user, String pass) {
         try {
             return em.createQuery("select u from Usuarios u where u.username like :username and u.password like :pass")
@@ -52,12 +40,6 @@ public class UsuariosController {
         return null;
     }
 
-    /**
-     * Obtiene un usuario en base a un nombre de usuario.
-     * Si existe, debería de ser solamente 1 registro
-     * @param user
-     * @return 
-     */
     public List<Usuarios> getUsuarioByUsername(String user) {
         try {
             return em.createQuery("select u from Usuarios u where u.username like '%" + user + "' ")
@@ -68,12 +50,6 @@ public class UsuariosController {
         }
     }
     
-    /**
-     * Obtiene una persona en base a un email
-     * Si existe, debería de ser solamente 1 registro
-     * @param email
-     * @return 
-     */
     public List<Persona> getPersonasByEmail(String email) {
         try {
             return em.createQuery("select p from persona p where p.email = :email")
@@ -101,10 +77,6 @@ public class UsuariosController {
         return null;
     }
     
-    /**
-     * Obtiene una lista de personas asociadas a un usuario
-     * @return 
-     */
     public List<Persona> getListPersonaUsuarios() {
         try {
             return em.createQuery("from persona p where p.usuario is not null order by p.usuario.fechaRegistro DESC").getResultList();
@@ -114,10 +86,6 @@ public class UsuariosController {
         return null;
     }
     
-    /**
-     * Obtiene una lista de usuarios registrados ordenados por fecha de registro
-     * @return 
-     */
     public List<Usuarios> getListaUsuarios() {
         try {
             return em.createQuery("from Usuarios u order by u.fechaRegistro DESC").getResultList();
@@ -127,12 +95,6 @@ public class UsuariosController {
         return null;
     }
     
-    /**
-     * Obtiene un usuario en base a un username y un token
-     * @param username
-     * @param tokenEmail
-     * @return 
-     */
     public Usuarios getUsuarioByUsernameByEmailConfirmToken(String username, String tokenEmail) {
         try {
             return (Usuarios) em.createQuery("select u from Usuarios u where u.username = :username and u.tokenConfirmacionEmail = :tokenEmail")
@@ -145,12 +107,6 @@ public class UsuariosController {
         return null;
     }
     
-    /**
-     * Obtiene un usuario en base a un username y un token
-     * @param username
-     * @param tokenCambioPass
-     * @return 
-     */
     public Usuarios getUsuarioByUsernameByCambioPassToken(String username, String tokenCambioPass) {
         try {
             return (Usuarios) em.createQuery("select u from Usuarios u where u.username = :username and u.tokenCambioPass = :tokenCambioPass")
