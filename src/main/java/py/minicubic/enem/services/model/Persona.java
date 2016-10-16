@@ -14,6 +14,7 @@ import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.ManyToOne;
+import javax.persistence.Temporal;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -47,6 +48,7 @@ public class Persona implements Serializable {
     private Long nroDocumento;
     
     @Column(name = "fechanacimiento")
+    @Temporal(javax.persistence.TemporalType.DATE)
     @Getter
     @Setter
     private Date fechaNacimiento;

@@ -8,7 +8,6 @@ package py.minicubic.enem.services.model;
 import java.io.Serializable;
 import javax.persistence.Column;
 import javax.persistence.Entity;
-import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
@@ -35,11 +34,11 @@ public class UsuarioRol implements Serializable {
     @JoinColumn(name = "idrol", referencedColumnName = "idrol")
     @Getter
     @Setter
-    private Rol idRol;
+    private Rol rol;
     
     @ManyToOne
     @JoinColumn(name = "idusuario", referencedColumnName = "idusuario")
     @Getter
     @Setter
-    private Usuarios idUsuario;
+    private Usuarios usuario;
 }

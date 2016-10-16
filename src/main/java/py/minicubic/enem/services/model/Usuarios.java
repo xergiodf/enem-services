@@ -74,4 +74,10 @@ public class Usuarios implements Serializable {
     @Getter
     @Setter
     private String tokenConfirmacionEmail;
+    
+    @Basic
+    @Column(name="direccionred")
+    @Getter
+    @Setter
+    private String direccionRed;
 }

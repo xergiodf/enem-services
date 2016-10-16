@@ -7,6 +7,7 @@ import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.UUID;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.ejb.Singleton;
 import javax.inject.Inject;
@@ -30,8 +31,11 @@ import py.minicubic.enem.services.mail.EnviarMail;
 import py.minicubic.enem.services.model.Ciudad;
 import py.minicubic.enem.services.model.Franquiciado;
 import py.minicubic.enem.services.model.Persona;
+import py.minicubic.enem.services.model.Rol;
+import py.minicubic.enem.services.model.UsuarioRol;
 import py.minicubic.enem.services.model.Usuarios;
 import py.minicubic.enem.services.util.Constants;
+import py.minicubic.enem.services.util.PasswordService;
 import py.minicubic.enem.services.util.Util;
 
 /**
@@ -52,59 +56,80 @@ public class UsuariosRest {
 
     @PersistenceContext
     private EntityManager em;
-    Logger log = Logger.getLogger("UsuariosRest");
-    
-    @Inject
-    private EnviarMail enviarMail;
+    static final Logger LOG = Logger.getLogger("UsuariosRest");
 
     @Path("login")
     @POST
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public ResponseData<String> obtenerUsuario(UsuariosDTO dto) {
-        ResponseData<String> response = new ResponseData<>();
-        log.info("*** Obtener Ususario ***");
-        log.info("Username: " + dto.getUsuario());
+    public ResponseData<UsuariosDTO> obtenerUsuario(UsuariosDTO dto) {
+        ResponseData<UsuariosDTO> response = new ResponseData<>();
+        LOG.info("*** Obtener Ususario ***");
+        LOG.log(Level.INFO, "Username: {0}", dto.getUsuario());
 
         try {
 
-            Usuarios usuario = null;
-            // Si existe un token en el request, llego desde el mail
-            if (!Util.isEmpty(dto.getTokenCambioPass())) {
-                
-                // Verificamos que sea valido el token
-                usuario = controller.getUsuarioByUsernameByCambioPassToken(dto.getUsuario(), dto.getTokenCambioPass());
-                
-                if ( Util.isEmpty(usuario) ) {
-                    log.warning("No existe token en la base de datos. Ya fue utilizado.");
-                    response.setCodigo(401);
-                    response.setMensaje("No autorizado, autenticacion rechazada");
-                    return response;
-                }
-                
-                // Limpiamos el token
-                usuario.setTokenCambioPass("");
-                em.merge(usuario);
-            } else {
-                List<Usuarios> lista = controller.getUsuarios(dto.getUsuario(), dto.getPassword());
-                if (lista.isEmpty()) {
-                    log.warning("Datos invalidos");
-                    response.setCodigo(401);
-                    response.setMensaje("No autorizado, autenticacion rechazada");
-                    return response;
-                }
-                
-                usuario = lista.iterator().next();
+            Usuarios usuario;
+
+            PasswordService ps = new PasswordService();
+            String encryptedPassword = ps.encrypt(dto.getPassword());
+
+            usuario = controller.getUsuarios(dto.getUsuario(), encryptedPassword);
+            if (Util.isEmpty(usuario)) {
+                LOG.log(Level.WARNING, "No coinciden usuario/contrase\u00f1a -> {0}:{1}", new Object[]{dto.getUsuario(), encryptedPassword});
+                response.setCodigo(401);
+                response.setMensaje("No coinciden usuario/contraseña");
+                return response;
             }
 
-            log.info("Login satisfactorio...");
+            if (Constants.ESTADO_SINCONFIRMAR.equals(usuario.getEstado())) {
+                LOG.warning("Usuario sin confirmar");
+                response.setCodigo(401);
+                response.setMensaje("El usuario aún no confirmó su email. Verifique su correo para activar.");
+                return response;
+            }
+
+            LOG.info("Login satisfactorio...");
             response.setCodigo(200);
             response.setMensaje("Success");
-            response.setData(Util.createToken(usuario.getIdUsuario()));
+
+            Persona persona = controller.getPersonaByUsuarioId(usuario.getIdUsuario());
+
+            dto = new UsuariosDTO();
+            dto.setToken(Util.createToken(usuario.getIdUsuario()));
+            dto.setNombreCompleto(persona.getNombres() + " " + persona.getApellidos());
+            dto.setAdmin(controller.isUserAdmin(usuario.getIdUsuario()));
+            dto.setDireccion(usuario.getDireccionRed());
+
+            response.setData(dto);
         } catch (Exception e) {
-            log.warning(e.getMessage());
+            e.printStackTrace();
             response.setCodigo(401);
             response.setMensaje("Error al intentar loguearse, autenticacion rechazada");
+        }
+        return response;
+    }
+
+    @Path("datospatrocinador")
+    @POST
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public ResponseData<PersonaDTO> getDatosPersona(UsuariosDTO dto) {
+        ResponseData<PersonaDTO> response = new ResponseData<>();
+
+        try {
+
+            PersonaDTO personaObj = new PersonaDTO();
+            Persona persona = controller.getPersonaByUsername(dto.getUsuario());
+            personaObj.setNombres(persona.getNombres());
+            personaObj.setApellidos(persona.getApellidos());
+
+            response.setCodigo(200);
+            response.setData(personaObj);
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setCodigo(401);
+            response.setMensaje("Error al obtener el usuario patrocinador");
         }
         return response;
     }
@@ -117,18 +142,17 @@ public class UsuariosRest {
         ResponseData<Usuarios> response = new ResponseData<>();
         try {
             // Validación de Sponsor
-            Persona sponsor = null;
-            log.info("*** Registrando Usuario ***");
+            Persona sponsor;
+            LOG.info("*** Registrando Usuario ***");
             List<Usuarios> lista = controller.getUsuarioByUsername(dto.getSponsorUsername());
 
             if (lista.isEmpty()) {
-                log.warning("Sponsor invalido");
+                LOG.warning("Sponsor invalido");
                 response.setCodigo(301);
                 response.setMensaje("No existe el sponsor ingresado");
                 return response;
             } else {
-                List<Persona> listaSponsor = controller.getPersona(lista.get(0).getIdUsuario());
-                sponsor = listaSponsor.get(0);
+                sponsor = controller.getPersonaByUsuarioId(lista.get(0).getIdUsuario());
             }
 
             // Validaciones de nulidad
@@ -142,7 +166,7 @@ public class UsuariosRest {
                     || dto.getApellidos() == null || dto.getApellidos().isEmpty() // Apellido
                     || dto.getGenero() == null || dto.getGenero().isEmpty()) {                  // Genero
 
-                log.warning("Algunos campos son requeridos");
+                LOG.warning("Algunos campos son requeridos");
                 response.setCodigo(301);
                 response.setMensaje("Campos requeridos: *Nombres *Nro. Documento *Direccion *Email *Password *Fecha Nacimiento *Sponsor *Apellido *Genero");
                 return response;
@@ -150,11 +174,11 @@ public class UsuariosRest {
 
             // Validacion de Ciudad
             Ciudad ciudad = null;
-            if (dto.getIdCiudad() != null || !dto.getIdCiudad().isEmpty()) {
+            if (!Util.isEmpty(dto.getIdCiudad())) {
 
                 ciudad = ciudadController.getCiudad(Long.valueOf(dto.getIdCiudad()));
                 if (ciudad == null) {
-                    log.warning("Ciudad invalida");
+                    LOG.warning("Ciudad invalida");
                     response.setCodigo(302);
                     response.setMensaje("Ciudad invalida");
                     return response;
@@ -167,7 +191,7 @@ public class UsuariosRest {
 
             // Validación de usuario
             if (!controller.getUsuarioByUsername(dto.getUsername()).isEmpty()) {
-                log.warning("Usuario ya existe en la base de datos");
+                LOG.warning("Usuario ya existe en la base de datos");
                 response.setCodigo(303);
                 response.setMensaje("Usuario ya existe en la base de datos");
                 return response;
@@ -175,7 +199,7 @@ public class UsuariosRest {
 
             // Validación de email
             if (!controller.getPersonasByEmail(dto.getEmail()).isEmpty()) {
-                log.warning("Email ya existe en la base de datos");
+                LOG.warning("Email ya existe en la base de datos");
                 response.setCodigo(304);
                 response.setMensaje("Email ya existe en la base de datos");
                 return response;
@@ -200,19 +224,32 @@ public class UsuariosRest {
             }
 
             if (edad < 18) {
-                log.warning("Edad invalida...");
+                LOG.warning("Edad invalida...");
                 response.setCodigo(303);
                 response.setMensaje("Edad invalida");
                 return response;
             }
 
+            PasswordService ps = new PasswordService();
+            String encryptedPassword = ps.encrypt(dto.getPassword());
+
             Usuarios usuarios = new Usuarios();
             usuarios.setEstado(Constants.ESTADO_SINCONFIRMAR);
-            usuarios.setPassword(dto.getPassword());
+            usuarios.setPassword(encryptedPassword);
             usuarios.setUsername(dto.getUsername());
             usuarios.setTokenConfirmacionEmail(UUID.randomUUID().toString());
+            usuarios.setDireccionRed(sponsor.getUsuario().getDireccionRed());
             em.persist(usuarios);
-            log.info("Usuarios creado: " + usuarios.getUsername());
+            LOG.log(Level.INFO, "Usuarios creado: {0}", usuarios.getUsername());
+            
+            Rol rol = new Rol();
+            rol.setIdRol(2L);
+            
+            UsuarioRol userRol = new UsuarioRol();
+            userRol.setUsuario(usuarios);
+            userRol.setRol(rol);
+            
+            em.persist(userRol);
 
             Persona persona = new Persona();
             persona.setNombres(dto.getNombres());
@@ -230,24 +267,18 @@ public class UsuariosRest {
             persona.setCiudad(ciudad);
 
             em.persist(persona);
-            log.info("Persona creada: " + persona.getNombres());
+            LOG.log(Level.INFO, "Persona creada: {0}", persona.getNombres());
 
-            Franquiciado franquiciado = new Franquiciado();
-            franquiciado.setNumeracion(1);
-            franquiciado.setPersona(persona);
-            franquiciado.setSponsor(sponsor);
-            franquiciado.setBrazo("");
-            em.persist(franquiciado);
-            log.info("Franquiciado creado con exito...");
-
-                
             response.setCodigo(200);
             response.setMensaje("Success");
             response.setData(usuarios);
+
+            String endPoint = Constants.BUSINESS_ENDPOINT + "&tokenEmail=" + usuarios.getTokenConfirmacionEmail();
+
             List<String> emails = new ArrayList<>();
             emails.add(persona.getEmail());
-            enviarMail.sendeEmail("Bienvenido " + usuarios.getUsername(), 
-                    "Usted ha sido registrado satisfactoriamente en ENEM, por favor ingrese a la pagina principal con su usuario y pass", emails);
+            EnviarMail.sendeEmail("Bienvenido " + usuarios.getUsername(),
+                    "Usted ha sido registrado satisfactoriamente en ENEM, por favor confirme su email ingresando al siguiente link " + endPoint, emails);
         } catch (Exception e) {
             e.printStackTrace();
             response.setCodigo(400);
@@ -263,6 +294,13 @@ public class UsuariosRest {
     public ResponseData<List<Usuarios>> getUsuariosNoActivos() {
         ResponseData<List<Usuarios>> response = new ResponseData<>();
         try {
+
+            if (!controller.isUserAdmin(usuarioLogueado.getIdUsuario())) {
+                response.setCodigo(401);
+                response.setMensaje(Constants.MSG_401);
+                return response;
+            }
+
             response.setCodigo(200);
             response.setMensaje("Success");
             response.setData(controller.getListaNoActivos());
@@ -281,6 +319,13 @@ public class UsuariosRest {
     public ResponseData<List<Usuarios>> getUsuariosActivos() {
         ResponseData<List<Usuarios>> response = new ResponseData<>();
         try {
+
+            if (!controller.isUserAdmin(usuarioLogueado.getIdUsuario())) {
+                response.setCodigo(401);
+                response.setMensaje(Constants.MSG_401);
+                return response;
+            }
+
             response.setCodigo(200);
             response.setMensaje("Success");
             response.setData(controller.getListaNoActivos());
@@ -299,17 +344,25 @@ public class UsuariosRest {
     public ResponseData<List<UsuariosDTO>> getUsuarios() {
         ResponseData<List<UsuariosDTO>> response = new ResponseData<>();
         try {
+
+            if (!controller.isUserAdmin(usuarioLogueado.getIdUsuario())) {
+                response.setCodigo(401);
+                response.setMensaje(Constants.MSG_401);
+                return response;
+            }
+
             response.setCodigo(200);
             response.setMensaje("Success");
 
-            UsuariosDTO usuarioResponse = null;
+            UsuariosDTO usuarioResponse;
             List<UsuariosDTO> usuariosResponse = new ArrayList<>();
             DateFormat df = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
 
             for (Persona persona : controller.getListPersonaUsuarios()) {
                 usuarioResponse = new UsuariosDTO();
+                usuarioResponse.setIdUsuario(persona.getUsuario().getIdUsuario());
                 usuarioResponse.setNombreCompleto(persona.getNombres() + " " + persona.getApellidos());
-                usuarioResponse.setActivo(!persona.getUsuario().getEstado().equals("NOACTIVO"));
+                usuarioResponse.setActivo(persona.getUsuario().getEstado().equals("ACTIVO"));
                 usuarioResponse.setFechaRegistro(df.format(persona.getUsuario().getFechaRegistro()));
                 usuarioResponse.setUsuario(persona.getUsuario().getUsername());
 
@@ -322,40 +375,6 @@ public class UsuariosRest {
             e.printStackTrace();
             response.setCodigo(401);
             response.setMensaje("Ocurrio un error al listar usuarios");
-        }
-        return response;
-    }
-
-    @Path("cambiarEstadoUsuario/{userId}")
-    @GET
-    @Secured
-    @Produces(MediaType.APPLICATION_JSON)
-    public ResponseData cambiarEstadoUsuario(@PathParam(value = "userId") String userId) {
-        ResponseData<List<UsuariosDTO>> response = new ResponseData<>();
-        try {
-
-            // Verificar que el usuario logueado tiene permisos para hacer esto            
-            Usuarios usuario = controller.getUsuario(Long.valueOf(userId));
-
-            if (Util.isEmpty(usuario)) {
-                log.warning("No se encuentra usuario con id: " + userId);
-                response.setCodigo(305);
-                response.setMensaje("No se encuentra usuario con id: " + userId);
-                return response;
-            }
-
-            response.setCodigo(200);
-            response.setMensaje("Success");
-
-            usuario.setEstado((usuario.getEstado().equals("NOACTIVO")) ? "ACTIVO" : "NOACTIVO");
-
-            em.merge(usuario);
-
-            return response;
-        } catch (Exception e) {
-            e.printStackTrace();
-            response.setCodigo(401);
-            response.setMensaje("Ocurrio un error al cambiar el estado del usuario");
         }
         return response;
     }
@@ -373,9 +392,10 @@ public class UsuariosRest {
             Usuarios usuario = controller.getUsuarioByUsernameByEmailConfirmToken(username, token);
 
             if (Util.isEmpty(usuario)) {
-                log.warning("Usuario no encontrado en base a los parámetros seleccionados");
+                LOG.warning("Usuario no encontrado en base a los parámetros seleccionados");
                 response.setCodigo(306);
                 response.setMensaje("No existe la combinación usuario (" + username + ") y token (" + token + ")");
+                return response;
             }
 
             // Limpiar el hash
@@ -395,6 +415,46 @@ public class UsuariosRest {
         return response;
     }
 
+    @Path("solicitarCambioContrasenha")
+    @POST
+    @Produces(MediaType.APPLICATION_JSON)
+    public ResponseData solicitarCambioContrasenha(PersonaDTO personaObj) {
+        ResponseData response = new ResponseData<>();
+
+        try {
+
+            // Generar un token y actualizar en el usuario
+            List<Persona> personasList = controller.getPersonasByEmail(personaObj.getEmail());
+            if (personasList.isEmpty()) {
+                LOG.log(Level.WARNING, "No existe el usuario asociado al email:{0}", personaObj.getEmail());
+                response.setCodigo(308);
+                response.setMensaje("No existe ningun registro con el mail: " + personaObj.getEmail());
+                return response;
+            }
+
+            Usuarios usuario = ((Persona) personasList.iterator().next()).getUsuario();
+            usuario.setTokenCambioPass(UUID.randomUUID().toString());
+            em.merge(usuario);
+
+            // Enviar un mail
+            String endPoint = Constants.BUSINESS_ENDPOINT + "&tokenCambioPass=" + usuario.getTokenCambioPass();
+
+            List<String> emails = new ArrayList<>();
+            emails.add(personaObj.getEmail());
+            EnviarMail.sendeEmail("Solicitud de cambio de contraseña del usuario: " + usuario.getUsername(),
+                    "Para cambiar su contraseña, ingrese por única vez en éste link " + endPoint, emails);
+
+            response.setCodigo(200);
+            response.setMensaje("Se ha enviado un mail a la dirección de correo " + personaObj.getEmail() + " para recuperar su contraseña.");
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setCodigo(401);
+            response.setMensaje("Ocurrio un error al solicitar el cambio de contraseña del usuario " + personaObj.getEmail());
+        }
+
+        return response;
+    }
+
     @Path("cambiarContrasenha")
     @POST
     @Secured
@@ -405,18 +465,21 @@ public class UsuariosRest {
 
         try {
             // Verificamos que la contraseña anterior sea la misma
-            List<Usuarios> usuarioList = controller.getUsuarios(usuarioLogueado.getUsername(), dto.getPassword());
+            PasswordService ps = new PasswordService();
+            String encryptedPassword = ps.encrypt(dto.getPassword());
 
-            if (usuarioList.isEmpty()) {
-                log.warning("Contraseñas no coinciden");
+            Usuarios usuario = controller.getUsuarios(usuarioLogueado.getUsername(), encryptedPassword);
+
+            if (Util.isEmpty(usuario)) {
+                LOG.warning("Contraseñas no coinciden");
                 response.setCodigo(307);
                 response.setMensaje("Las contraseñas no coinciden");
                 return response;
             }
 
             // Realizamos el cambio
-            usuarioLogueado.setPassword(dto.getNewPassword());
-            em.merge(usuarioLogueado);
+            usuario.setPassword(ps.encrypt(dto.getNewPassword()));
+            em.merge(usuario);
 
             response.setCodigo(200);
             response.setMensaje("Contraseña cambiada correctamente");
@@ -430,34 +493,124 @@ public class UsuariosRest {
         return response;
     }
 
-    @Path("solicitarCambioContrasenha/{mail}")
-    @GET
+    @Path("cambioContrasenhaOlvidada")
+    @POST
     @Produces(MediaType.APPLICATION_JSON)
-    public ResponseData solicitarCambioContrasenha(@PathParam(value = "mail") String username) {
+    public ResponseData cambioContrasenhaOlvidada(UsuariosDTO usuarioObj) {
         ResponseData response = new ResponseData<>();
 
         try {
 
-            // Generar un token y actualizar en el usuario
-            List<Usuarios> usuarioList = controller.getUsuarioByUsername(username);
-
-            if (usuarioList.isEmpty()) {
-                log.warning("No existe el usuario " + username);
+            if (Util.isEmpty(usuarioObj.getTokenCambioPass())) {
+                LOG.warning("Token invalido!");
                 response.setCodigo(308);
-                response.setMensaje(username);
+                response.setMensaje("Token invalido!");
+                return response;
             }
 
-            Usuarios usuario = usuarioList.iterator().next();
-            usuario.setTokenCambioPass(UUID.randomUUID().toString());
+            Usuarios usuario = controller.getUsuarioByTokenCambioPass(usuarioObj.getTokenCambioPass());
+            if (Util.isEmpty(usuario)) {
+                LOG.warning("Token invalido!");
+                response.setCodigo(308);
+                response.setMensaje("Token invalido!");
+                return response;
+            }
+
+            PasswordService ps = new PasswordService();
+            String encryptedPassword = ps.encrypt(usuarioObj.getNewPassword());
+
+            usuario.setTokenCambioPass("");
+            usuario.setPassword(encryptedPassword);
             em.merge(usuario);
 
-            // Enviar un mail
+            response.setCodigo(200);
+            response.setMensaje("Contraseña cambiada correctamente.");
         } catch (Exception e) {
             e.printStackTrace();
             response.setCodigo(401);
-            response.setMensaje("Ocurrio un error al solicitar el cambio de contraseña del usuario " + username);
+            response.setMensaje("Ocurrio un error al cambiar la contraseña del usuario.");
         }
 
+        return response;
+    }
+
+    @Path("cambiarEstadoUsuario/{userId}")
+    @GET
+    @Secured
+    @Produces(MediaType.APPLICATION_JSON)
+    public ResponseData cambiarEstadoUsuario(@PathParam(value = "userId") Long userId) {
+        ResponseData<List<UsuariosDTO>> response = new ResponseData<>();
+        try {
+
+            if (!controller.isUserAdmin(usuarioLogueado.getIdUsuario())) {
+                response.setCodigo(401);
+                response.setMensaje(Constants.MSG_401);
+                return response;
+            }
+
+            // Verificar que el usuario logueado tiene permisos para hacer esto     
+            Persona franquiciado = controller.getPersonaByUsuarioId(userId);
+            if (Util.isEmpty(franquiciado)) {
+                LOG.log(Level.WARNING, "No se encuentra usuario con id: {0}", userId);
+                response.setCodigo(305);
+                response.setMensaje("No se encuentra usuario con id: " + userId);
+                return response;
+            }
+            Usuarios usuario = franquiciado.getUsuario();
+            Persona sponsor = controller.getPersonaByUsuarioId(franquiciado.getUsuario().getIdUsuario());
+
+            usuario.setEstado((usuario.getEstado().equals(Constants.ESTADO_INACTIVO)) ? Constants.ESTADO_ACTIVO : Constants.ESTADO_INACTIVO);
+
+            em.merge(usuario);
+
+            // Verificamos si existe en la red
+            Franquiciado franquiciadoReg = controller.getFranquiciado(franquiciado.getIdPersona(), sponsor.getIdPersona());
+            if (Util.isEmpty(franquiciadoReg)) {
+                franquiciadoReg = new Franquiciado();
+                franquiciadoReg.setNumeracion(1);
+                franquiciadoReg.setPersona(franquiciado);
+                franquiciadoReg.setSponsor(sponsor);
+                franquiciadoReg.setBrazo(usuario.getDireccionRed());
+                em.persist(franquiciadoReg);
+                LOG.info("Franquiciado creado con exito...");
+                response.setMensaje("Franquiciado creado correctamente.");
+            }
+
+            response.setCodigo(200);
+            response.setMensaje("Usuario " + ((usuario.getEstado().equals(Constants.ESTADO_INACTIVO)) ? "activado" : "inactivado") + " correctamente.");
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setCodigo(401);
+            response.setMensaje("Ocurrio un error al cambiar el estado del usuario");
+        }
+        return response;
+    }
+
+    @Path("cambiarDireccionRed")
+    @GET
+    @Secured
+    @Produces(MediaType.APPLICATION_JSON)
+    public ResponseData cambiarDireccionRed() {
+        ResponseData<UsuariosDTO> response = new ResponseData<>();
+        try {
+            
+            Usuarios usuario = controller.getUsuario(usuarioLogueado.getIdUsuario());
+            
+            usuario.setDireccionRed(usuario.getDireccionRed().equals(Constants.DIR_DERECHA) ? Constants.DIR_IZQUIERDA : Constants.DIR_DERECHA);
+            em.merge(usuario);
+            
+            UsuariosDTO usuarioObj = new UsuariosDTO();
+            usuarioObj.setDireccion(usuario.getDireccionRed());
+            response.setData(usuarioObj);
+            response.setCodigo(200);
+            response.setMensaje("Dirección de red cambiada correctamente");
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setCodigo(401);
+            response.setMensaje("Ocurrio un error al cambiar la direccion de la red");
+        }
         return response;
     }
 }

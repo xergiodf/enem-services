@@ -18,6 +18,10 @@ import javax.xml.bind.annotation.XmlRootElement;
 @XmlRootElement
 @XmlAccessorType(XmlAccessType.FIELD)
 public class UsuariosDTO<T> {
+        
+    @Getter
+    @Setter
+    private Long idUsuario;
 
     @Getter
     @Setter
@@ -54,4 +58,12 @@ public class UsuariosDTO<T> {
     @Getter
     @Setter
     private String tokenCambioPass;
+    
+    @Getter
+    @Setter
+    private String token;
+    
+    @Getter
+    @Setter
+    private String direccion;
 }
