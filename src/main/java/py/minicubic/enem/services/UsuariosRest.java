@@ -189,7 +189,7 @@ public class UsuariosRest {
             SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
             Date fechaNacimiento = sdf.parse(dto.getFechaNacimiento());
 
-            // Validación de usuario
+            // Validación de usuarioFranquiciado
             if (!controller.getUsuarioByUsername(dto.getUsername()).isEmpty()) {
                 LOG.warning("Usuario ya existe en la base de datos");
                 response.setCodigo(303);
@@ -234,7 +234,7 @@ public class UsuariosRest {
             String encryptedPassword = ps.encrypt(dto.getPassword());
 
             Usuarios usuarios = new Usuarios();
-            usuarios.setEstado(Constants.ESTADO_SINCONFIRMAR);
+            usuarios.setEstado(Constants.ESTADO_INACTIVO);
             usuarios.setPassword(encryptedPassword);
             usuarios.setUsername(dto.getUsername());
             usuarios.setTokenConfirmacionEmail(UUID.randomUUID().toString());
@@ -261,7 +261,7 @@ public class UsuariosRest {
             persona.setGenero(dto.getGenero());
             persona.setDireccion(dto.getDireccion());
             persona.setEmail(dto.getEmail());
-
+            persona.setIdSponsor(sponsor.getIdPersona());
             persona.setFechaNacimiento(fechaNacimiento);
             persona.setUsuario(usuarios);
             persona.setCiudad(ciudad);
@@ -273,12 +273,12 @@ public class UsuariosRest {
             response.setMensaje("Success");
             response.setData(usuarios);
 
-            String endPoint = Constants.BUSINESS_ENDPOINT + "&tokenEmail=" + usuarios.getTokenConfirmacionEmail();
-
-            List<String> emails = new ArrayList<>();
-            emails.add(persona.getEmail());
-            EnviarMail.sendeEmail("Bienvenido " + usuarios.getUsername(),
-                    "Usted ha sido registrado satisfactoriamente en ENEM, por favor confirme su email ingresando al siguiente link " + endPoint, emails);
+//            String endPoint = Constants.BUSINESS_ENDPOINT + "&tokenEmail=" + usuarios.getTokenConfirmacionEmail();
+//
+//            List<String> emails = new ArrayList<>();
+//            emails.add(persona.getEmail());
+//            EnviarMail.sendeEmail("Bienvenido " + usuarios.getUsername(),
+//                    "Usted ha sido registrado satisfactoriamente en ENEM, por favor confirme su email ingresando al siguiente link " + endPoint, emails);
         } catch (Exception e) {
             e.printStackTrace();
             response.setCodigo(400);
@@ -423,7 +423,7 @@ public class UsuariosRest {
 
         try {
 
-            // Generar un token y actualizar en el usuario
+            // Generar un token y actualizar en el usuarioFranquiciado
             List<Persona> personasList = controller.getPersonasByEmail(personaObj.getEmail());
             if (personasList.isEmpty()) {
                 LOG.log(Level.WARNING, "No existe el usuario asociado al email:{0}", personaObj.getEmail());
@@ -542,42 +542,45 @@ public class UsuariosRest {
         ResponseData<List<UsuariosDTO>> response = new ResponseData<>();
         try {
 
+            // Verificar que el usuarioFranquiciado logueado tiene permisos para hacer esto   
             if (!controller.isUserAdmin(usuarioLogueado.getIdUsuario())) {
                 response.setCodigo(401);
                 response.setMensaje(Constants.MSG_401);
                 return response;
             }
-
-            // Verificar que el usuario logueado tiene permisos para hacer esto     
-            Persona franquiciado = controller.getPersonaByUsuarioId(userId);
-            if (Util.isEmpty(franquiciado)) {
+            
+            Persona personaFranquiciado = controller.getPersonaByUsuarioId(userId);
+            if (Util.isEmpty(personaFranquiciado)) {
                 LOG.log(Level.WARNING, "No se encuentra usuario con id: {0}", userId);
                 response.setCodigo(305);
                 response.setMensaje("No se encuentra usuario con id: " + userId);
                 return response;
             }
-            Usuarios usuario = franquiciado.getUsuario();
-            Persona sponsor = controller.getPersonaByUsuarioId(franquiciado.getUsuario().getIdUsuario());
+            Usuarios usuarioFranquiciado = personaFranquiciado.getUsuario();
+            Persona personaSponsor = controller.getPersonaByUsuarioId(personaFranquiciado.getIdSponsor());
 
-            usuario.setEstado((usuario.getEstado().equals(Constants.ESTADO_INACTIVO)) ? Constants.ESTADO_ACTIVO : Constants.ESTADO_INACTIVO);
+            usuarioFranquiciado.setEstado((usuarioFranquiciado.getEstado().equals(Constants.ESTADO_INACTIVO)) ? Constants.ESTADO_ACTIVO : Constants.ESTADO_INACTIVO);
 
-            em.merge(usuario);
+            em.merge(usuarioFranquiciado);
 
             // Verificamos si existe en la red
-            Franquiciado franquiciadoReg = controller.getFranquiciado(franquiciado.getIdPersona(), sponsor.getIdPersona());
+            Franquiciado franquiciadoReg = controller.getFranquiciado(personaFranquiciado.getIdPersona(), personaSponsor.getIdPersona());
             if (Util.isEmpty(franquiciadoReg)) {
+                // Obtenemos el numero que le corresponde
+                Integer numeracion = controller.getUltimoFranquiciadoBySponsor(personaSponsor.getIdPersona(), personaSponsor.getUsuario().getDireccionRed());
+                
                 franquiciadoReg = new Franquiciado();
-                franquiciadoReg.setNumeracion(1);
-                franquiciadoReg.setPersona(franquiciado);
-                franquiciadoReg.setSponsor(sponsor);
-                franquiciadoReg.setBrazo(usuario.getDireccionRed());
+                franquiciadoReg.setNumeracion(1+numeracion.intValue());
+                franquiciadoReg.setPersona(personaFranquiciado);
+                franquiciadoReg.setSponsor(personaSponsor);
+                franquiciadoReg.setBrazo(personaSponsor.getUsuario().getDireccionRed());
                 em.persist(franquiciadoReg);
                 LOG.info("Franquiciado creado con exito...");
                 response.setMensaje("Franquiciado creado correctamente.");
             }
 
             response.setCodigo(200);
-            response.setMensaje("Usuario " + ((usuario.getEstado().equals(Constants.ESTADO_INACTIVO)) ? "activado" : "inactivado") + " correctamente.");
+            response.setMensaje("Usuario " + ((usuarioFranquiciado.getEstado().equals(Constants.ESTADO_INACTIVO)) ? "activado" : "inactivado") + " correctamente.");
             return response;
         } catch (Exception e) {
             e.printStackTrace();

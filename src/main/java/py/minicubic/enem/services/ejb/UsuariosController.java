@@ -12,6 +12,7 @@ import py.minicubic.enem.services.model.Rol;
 import py.minicubic.enem.services.model.UsuarioRol;
 import py.minicubic.enem.services.model.Usuarios;
 import py.minicubic.enem.services.util.Constants;
+import py.minicubic.enem.services.util.Util;
 
 /**
  *
@@ -49,7 +50,8 @@ public class UsuariosController {
 
     public List<Usuarios> getUsuarioByUsername(String user) {
         try {
-            return em.createQuery("select u from Usuarios u where u.username like '%" + user + "' ")
+            return em.createQuery("select u from Usuarios u where u.username = :user and u.estado = '" + Constants.ESTADO_ACTIVO + "' ")
+                    .setParameter("user", user)
                     .getResultList();
         } catch (Exception e) {
             e.printStackTrace();
@@ -88,7 +90,7 @@ public class UsuariosController {
 
     public List<Persona> getListPersonaUsuarios() {
         try {
-            return em.createQuery("SELECT p from persona p where p.usuario is not null and p.usuario.estado != 'SINCONFIRMAR' order by p.usuario.fechaRegistro DESC").getResultList();
+            return em.createQuery("SELECT p from persona p where p.usuario is not null and p.usuario.estado != '" + Constants.ESTADO_SINCONFIRMAR + "' order by p.usuario.fechaRegistro DESC").getResultList();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -144,7 +146,7 @@ public class UsuariosController {
 
     public List<Usuarios> getListaNoActivos() {
         try {
-            return em.createQuery("select u from Usuarios u where u.estado = 'NOACTIVO' order by u.idUsuario ").getResultList();
+            return em.createQuery("select u from Usuarios u where u.estado = '" + Constants.ESTADO_INACTIVO + "' order by u.idUsuario ").getResultList();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -153,7 +155,7 @@ public class UsuariosController {
 
     public List<Usuarios> getListaActivos() {
         try {
-            return em.createQuery("select u from Usuarios u where u.estado = 'ACTIVO' order by u.idUsuario ").getResultList();
+            return em.createQuery("select u from Usuarios u where u.estado = '" + Constants.ESTADO_ACTIVO + "' order by u.idUsuario ").getResultList();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -190,7 +192,7 @@ public class UsuariosController {
     public Persona getPersonaByUsername(String username) {
         try {
 
-            return (Persona) em.createQuery("select p from persona p where p.usuario.username = :username")
+            return (Persona) em.createQuery("select p from persona p where p.usuario.username = :username and p.usuario.estado = '" + Constants.ESTADO_ACTIVO + "'")
                     .setParameter("username", username)
                     .getSingleResult();
         } catch (NoResultException nre) {
@@ -211,5 +213,24 @@ public class UsuariosController {
             e.printStackTrace();
         }
         return null;
+    }
+    
+    public Integer getUltimoFranquiciadoBySponsor(Long idSponsor, String brazo) {
+        try {
+            Integer ultimo = (Integer) em.createQuery("select max(f.numeracion) from franquiciado f where f.sponsor.idPersona = :idSponsor and f.brazo = :brazo group by f.brazo")
+                    .setParameter("idSponsor", idSponsor)
+                    .setParameter("brazo", brazo)
+                    .getSingleResult();         
+            
+            if ( Util.isEmpty(ultimo) ) {
+                ultimo = 0;
+            }
+            
+            return ultimo;
+        } catch (NoResultException nre) {
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return 0;
     }
 }
