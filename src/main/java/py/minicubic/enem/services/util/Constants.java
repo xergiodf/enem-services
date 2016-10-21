@@ -19,7 +19,9 @@ public final class Constants {
     public static final String BOOLEAN_FALSE = "NO";
     
     public static final String DIR_DERECHA = "DERECHA";
+    public static final String DIR_DERECHA_STR = "ABAJO";
     public static final String DIR_IZQUIERDA = "IZQUIERDA";
+    public static final String DIR_IZQUIERDA_STR = "ARRIBA";
     
     public static final String ABab = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     

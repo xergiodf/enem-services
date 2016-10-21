@@ -66,4 +66,8 @@ public class UsuariosDTO<T> {
     @Getter
     @Setter
     private String direccion;
+    
+    @Getter
+    @Setter
+    private String sponsor;
 }

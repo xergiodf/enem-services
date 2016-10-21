@@ -24,6 +24,16 @@ public class UsuariosController {
 
     @PersistenceContext
     EntityManager em;
+    
+    public Persona getPersona(Long id) {
+        try {
+            return em.find(Persona.class, id);
+        } catch (NoResultException nre) {
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
 
     public Usuarios getUsuario(Long id) {
         try {
@@ -88,9 +98,11 @@ public class UsuariosController {
         return null;
     }
 
-    public List<Persona> getListPersonaUsuarios() {
+    public List<Persona> getListPersonaUsuarios(Long idUsuario) {
         try {
-            return em.createQuery("SELECT p from persona p where p.usuario is not null and p.usuario.estado != '" + Constants.ESTADO_SINCONFIRMAR + "' order by p.usuario.fechaRegistro DESC").getResultList();
+            return em.createQuery("SELECT p from persona p where p.usuario is not null and p.usuario.idUsuario != :idUsuario and p.usuario.estado != '" + Constants.ESTADO_SINCONFIRMAR + "' order by p.usuario.fechaRegistro DESC")
+                    .setParameter("idUsuario", idUsuario)
+                    .getResultList();
         } catch (Exception e) {
             e.printStackTrace();
         }

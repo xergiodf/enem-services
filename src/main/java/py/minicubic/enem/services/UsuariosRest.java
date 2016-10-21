@@ -25,11 +25,13 @@ import py.minicubic.enem.services.annotations.Secured;
 import py.minicubic.enem.services.dto.PersonaDTO;
 import py.minicubic.enem.services.dto.ResponseData;
 import py.minicubic.enem.services.dto.UsuariosDTO;
+import py.minicubic.enem.services.ejb.ArbolController;
 import py.minicubic.enem.services.ejb.CiudadController;
 import py.minicubic.enem.services.ejb.UsuariosController;
 import py.minicubic.enem.services.mail.EnviarMail;
 import py.minicubic.enem.services.model.Ciudad;
 import py.minicubic.enem.services.model.Franquiciado;
+import py.minicubic.enem.services.model.Nodo;
 import py.minicubic.enem.services.model.Persona;
 import py.minicubic.enem.services.model.Rol;
 import py.minicubic.enem.services.model.UsuarioRol;
@@ -53,6 +55,8 @@ public class UsuariosRest {
     private UsuariosController controller;
     @Inject
     private CiudadController ciudadController;
+    @Inject
+    private ArbolController arbolController;
 
     @PersistenceContext
     private EntityManager em;
@@ -94,12 +98,17 @@ public class UsuariosRest {
             response.setMensaje("Success");
 
             Persona persona = controller.getPersonaByUsuarioId(usuario.getIdUsuario());
-
+            
             dto = new UsuariosDTO();
             dto.setToken(Util.createToken(usuario.getIdUsuario()));
             dto.setNombreCompleto(persona.getNombres() + " " + persona.getApellidos());
             dto.setAdmin(controller.isUserAdmin(usuario.getIdUsuario()));
-            dto.setDireccion(usuario.getDireccionRed());
+            dto.setDireccion(usuario.getDireccionRed().equals(Constants.DIR_DERECHA) ? Constants.DIR_DERECHA_STR : Constants.DIR_IZQUIERDA_STR);
+            dto.setUsuario(usuario.getUsername());
+            if ( !Util.isEmpty(persona.getIdSponsor()) ) {
+                Persona personaSponsor = controller.getPersona(persona.getIdSponsor());
+                dto.setSponsor(personaSponsor.getUsuario().getUsername());
+            }
 
             response.setData(dto);
         } catch (Exception e) {
@@ -126,6 +135,9 @@ public class UsuariosRest {
 
             response.setCodigo(200);
             response.setData(personaObj);
+        } catch(NullPointerException npe) {
+            response.setCodigo(404);
+            response.setMensaje("No existe el patrocinador");
         } catch (Exception e) {
             e.printStackTrace();
             response.setCodigo(401);
@@ -234,7 +246,7 @@ public class UsuariosRest {
             String encryptedPassword = ps.encrypt(dto.getPassword());
 
             Usuarios usuarios = new Usuarios();
-            usuarios.setEstado(Constants.ESTADO_INACTIVO);
+            usuarios.setEstado(Constants.ESTADO_SINCONFIRMAR);
             usuarios.setPassword(encryptedPassword);
             usuarios.setUsername(dto.getUsername());
             usuarios.setTokenConfirmacionEmail(UUID.randomUUID().toString());
@@ -273,12 +285,12 @@ public class UsuariosRest {
             response.setMensaje("Success");
             response.setData(usuarios);
 
-//            String endPoint = Constants.BUSINESS_ENDPOINT + "&tokenEmail=" + usuarios.getTokenConfirmacionEmail();
-//
-//            List<String> emails = new ArrayList<>();
-//            emails.add(persona.getEmail());
-//            EnviarMail.sendeEmail("Bienvenido " + usuarios.getUsername(),
-//                    "Usted ha sido registrado satisfactoriamente en ENEM, por favor confirme su email ingresando al siguiente link " + endPoint, emails);
+            String endPoint = Constants.BUSINESS_ENDPOINT + "&tokenEmail=" + usuarios.getTokenConfirmacionEmail();
+
+            List<String> emails = new ArrayList<>();
+            emails.add(persona.getEmail());
+            EnviarMail.sendeEmail("Bienvenido " + usuarios.getUsername(),
+                    "Usted ha sido registrado satisfactoriamente en ENEM, por favor confirme su email ingresando al siguiente link " + endPoint, emails);
         } catch (Exception e) {
             e.printStackTrace();
             response.setCodigo(400);
@@ -358,7 +370,7 @@ public class UsuariosRest {
             List<UsuariosDTO> usuariosResponse = new ArrayList<>();
             DateFormat df = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
 
-            for (Persona persona : controller.getListPersonaUsuarios()) {
+            for (Persona persona : controller.getListPersonaUsuarios(usuarioLogueado.getIdUsuario())) {
                 usuarioResponse = new UsuariosDTO();
                 usuarioResponse.setIdUsuario(persona.getUsuario().getIdUsuario());
                 usuarioResponse.setNombreCompleto(persona.getNombres() + " " + persona.getApellidos());
@@ -557,7 +569,14 @@ public class UsuariosRest {
                 return response;
             }
             Usuarios usuarioFranquiciado = personaFranquiciado.getUsuario();
-            Persona personaSponsor = controller.getPersonaByUsuarioId(personaFranquiciado.getIdSponsor());
+            Persona personaSponsor = controller.getPersona(personaFranquiciado.getIdSponsor());
+            
+            if (Util.isEmpty(personaSponsor)) {
+                LOG.log(Level.WARNING, "No se encuentra persona con id: {0}", personaFranquiciado.getIdSponsor());
+                response.setCodigo(305);
+                response.setMensaje("No se encuentra persona con id: " + personaFranquiciado.getIdSponsor());
+                return response;
+            }
 
             usuarioFranquiciado.setEstado((usuarioFranquiciado.getEstado().equals(Constants.ESTADO_INACTIVO)) ? Constants.ESTADO_ACTIVO : Constants.ESTADO_INACTIVO);
 
@@ -566,6 +585,8 @@ public class UsuariosRest {
             // Verificamos si existe en la red
             Franquiciado franquiciadoReg = controller.getFranquiciado(personaFranquiciado.getIdPersona(), personaSponsor.getIdPersona());
             if (Util.isEmpty(franquiciadoReg)) {
+                LOG.info("No hay franquiciado. Creamos uno nuevo.");
+                
                 // Obtenemos el numero que le corresponde
                 Integer numeracion = controller.getUltimoFranquiciadoBySponsor(personaSponsor.getIdPersona(), personaSponsor.getUsuario().getDireccionRed());
                 
@@ -576,11 +597,18 @@ public class UsuariosRest {
                 franquiciadoReg.setBrazo(personaSponsor.getUsuario().getDireccionRed());
                 em.persist(franquiciadoReg);
                 LOG.info("Franquiciado creado con exito...");
-                response.setMensaje("Franquiciado creado correctamente.");
+                
+                // Obtenemos la red del sponsor e insertamos en el orden que le corresponda
+                Nodo nodoSponsor = arbolController.getArbolByPersona(personaSponsor.getIdPersona());
+                arbolController.guardarNodo(personaFranquiciado.getIdPersona(), personaSponsor.getUsuario().getDireccionRed(), nodoSponsor);
+                
+                LOG.info("Nodo creado con exito...");
+            } else {
+                LOG.info("Franquiciado ya existe");
             }
 
             response.setCodigo(200);
-            response.setMensaje("Usuario " + ((usuarioFranquiciado.getEstado().equals(Constants.ESTADO_INACTIVO)) ? "activado" : "inactivado") + " correctamente.");
+            response.setMensaje("Usuario " + ((usuarioFranquiciado.getEstado().equals(Constants.ESTADO_INACTIVO)) ? "inactivado" : "activado") + " correctamente.");
             return response;
         } catch (Exception e) {
             e.printStackTrace();
@@ -604,7 +632,7 @@ public class UsuariosRest {
             em.merge(usuario);
             
             UsuariosDTO usuarioObj = new UsuariosDTO();
-            usuarioObj.setDireccion(usuario.getDireccionRed());
+            usuarioObj.setDireccion(usuario.getDireccionRed().equals(Constants.DIR_DERECHA) ? Constants.DIR_DERECHA_STR : Constants.DIR_IZQUIERDA_STR);
             response.setData(usuarioObj);
             response.setCodigo(200);
             response.setMensaje("Dirección de red cambiada correctamente");
@@ -615,5 +643,23 @@ public class UsuariosRest {
             response.setMensaje("Ocurrio un error al cambiar la direccion de la red");
         }
         return response;
+    }
+    
+    @Path("visualizarRed")
+    @Secured
+    @GET
+    public String verRed() {
+        try {            
+            
+            LOG.info(usuarioLogueado.getUsername());
+            Persona persona = controller.getPersonaByUsername(usuarioLogueado.getUsername());            
+            
+            String arbol = arbolController.getNodoArbol(persona.getIdPersona(), null);
+
+            return arbol;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return "[{}]";
     }
 }
