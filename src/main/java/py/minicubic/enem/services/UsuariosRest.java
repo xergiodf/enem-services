@@ -98,14 +98,14 @@ public class UsuariosRest {
             response.setMensaje("Success");
 
             Persona persona = controller.getPersonaByUsuarioId(usuario.getIdUsuario());
-            
+
             dto = new UsuariosDTO();
             dto.setToken(Util.createToken(usuario.getIdUsuario()));
             dto.setNombreCompleto(persona.getNombres() + " " + persona.getApellidos());
             dto.setAdmin(controller.isUserAdmin(usuario.getIdUsuario()));
             dto.setDireccion(usuario.getDireccionRed().equals(Constants.DIR_DERECHA) ? Constants.DIR_DERECHA_STR : Constants.DIR_IZQUIERDA_STR);
             dto.setUsuario(usuario.getUsername());
-            if ( !Util.isEmpty(persona.getIdSponsor()) ) {
+            if (!Util.isEmpty(persona.getIdSponsor())) {
                 Persona personaSponsor = controller.getPersona(persona.getIdSponsor());
                 dto.setSponsor(personaSponsor.getUsuario().getUsername());
             }
@@ -135,7 +135,7 @@ public class UsuariosRest {
 
             response.setCodigo(200);
             response.setData(personaObj);
-        } catch(NullPointerException npe) {
+        } catch (NullPointerException npe) {
             response.setCodigo(404);
             response.setMensaje("No existe el patrocinador");
         } catch (Exception e) {
@@ -253,14 +253,14 @@ public class UsuariosRest {
             usuarios.setDireccionRed(sponsor.getUsuario().getDireccionRed());
             em.persist(usuarios);
             LOG.log(Level.INFO, "Usuarios creado: {0}", usuarios.getUsername());
-            
+
             Rol rol = new Rol();
             rol.setIdRol(2L);
-            
+
             UsuarioRol userRol = new UsuarioRol();
             userRol.setUsuario(usuarios);
             userRol.setRol(rol);
-            
+
             em.persist(userRol);
 
             Persona persona = new Persona();
@@ -369,6 +369,7 @@ public class UsuariosRest {
             UsuariosDTO usuarioResponse;
             List<UsuariosDTO> usuariosResponse = new ArrayList<>();
             DateFormat df = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+            DateFormat df1 = new SimpleDateFormat("dd/MM/yyyy");
 
             for (Persona persona : controller.getListPersonaUsuarios(usuarioLogueado.getIdUsuario())) {
                 usuarioResponse = new UsuariosDTO();
@@ -377,6 +378,16 @@ public class UsuariosRest {
                 usuarioResponse.setActivo(persona.getUsuario().getEstado().equals("ACTIVO"));
                 usuarioResponse.setFechaRegistro(df.format(persona.getUsuario().getFechaRegistro()));
                 usuarioResponse.setUsuario(persona.getUsuario().getUsername());
+                usuarioResponse.setGenero(persona.getGenero().equals("M") ? "MASCULINO" : "FEMENINO");
+                usuarioResponse.setFechaNacimiento(df1.format(persona.getFechaNacimiento()));
+                usuarioResponse.setSponsor((controller.getPersona(persona.getIdSponsor())).getUsuario().getUsername());
+                usuarioResponse.setNroDocumento(persona.getNroDocumento().toString());
+                usuarioResponse.setRuc(persona.getRuc());
+                usuarioResponse.setTelefono(persona.getTelefono());
+                usuarioResponse.setCelular(persona.getCelular());
+                usuarioResponse.setLugarDireccion(persona.getDireccion());
+                usuarioResponse.setCiudad(!Util.isEmpty(persona.getCiudad()) ? ciudadController.getCiudad(persona.getCiudad().getIdCiudad()).getNombre() : "");
+                usuarioResponse.setMail(persona.getEmail());
 
                 usuariosResponse.add(usuarioResponse);
             }
@@ -560,7 +571,7 @@ public class UsuariosRest {
                 response.setMensaje(Constants.MSG_401);
                 return response;
             }
-            
+
             Persona personaFranquiciado = controller.getPersonaByUsuarioId(userId);
             if (Util.isEmpty(personaFranquiciado)) {
                 LOG.log(Level.WARNING, "No se encuentra usuario con id: {0}", userId);
@@ -570,7 +581,7 @@ public class UsuariosRest {
             }
             Usuarios usuarioFranquiciado = personaFranquiciado.getUsuario();
             Persona personaSponsor = controller.getPersona(personaFranquiciado.getIdSponsor());
-            
+
             if (Util.isEmpty(personaSponsor)) {
                 LOG.log(Level.WARNING, "No se encuentra persona con id: {0}", personaFranquiciado.getIdSponsor());
                 response.setCodigo(305);
@@ -582,26 +593,38 @@ public class UsuariosRest {
 
             em.merge(usuarioFranquiciado);
 
+            // Enviar un mail
+            List<String> emails = new ArrayList<>();
+            emails.add(personaFranquiciado.getEmail());
+
+            if (Constants.ESTADO_ACTIVO.equals(usuarioFranquiciado.getEstado())) {
+                EnviarMail.sendeEmail("Activacion de la cuenta: " + usuarioFranquiciado.getUsername(),
+                        "Este es un correo de aviso. No responder. Su cuenta ha sido activada correctamente.", emails);
+            } else {
+                EnviarMail.sendeEmail("Inactivacion de la cuenta: " + usuarioFranquiciado.getUsername(),
+                        "Este es un correo de aviso. No responder. Su cuenta ha sido inactivada.", emails);
+            }
+
             // Verificamos si existe en la red
             Franquiciado franquiciadoReg = controller.getFranquiciado(personaFranquiciado.getIdPersona(), personaSponsor.getIdPersona());
             if (Util.isEmpty(franquiciadoReg)) {
                 LOG.info("No hay franquiciado. Creamos uno nuevo.");
-                
+
                 // Obtenemos el numero que le corresponde
                 Integer numeracion = controller.getUltimoFranquiciadoBySponsor(personaSponsor.getIdPersona(), personaSponsor.getUsuario().getDireccionRed());
-                
+
                 franquiciadoReg = new Franquiciado();
-                franquiciadoReg.setNumeracion(1+numeracion.intValue());
+                franquiciadoReg.setNumeracion(1 + numeracion.intValue());
                 franquiciadoReg.setPersona(personaFranquiciado);
                 franquiciadoReg.setSponsor(personaSponsor);
                 franquiciadoReg.setBrazo(personaSponsor.getUsuario().getDireccionRed());
                 em.persist(franquiciadoReg);
                 LOG.info("Franquiciado creado con exito...");
-                
+
                 // Obtenemos la red del sponsor e insertamos en el orden que le corresponda
                 Nodo nodoSponsor = arbolController.getArbolByPersona(personaSponsor.getIdPersona());
                 arbolController.guardarNodo(personaFranquiciado.getIdPersona(), personaSponsor.getUsuario().getDireccionRed(), nodoSponsor);
-                
+
                 LOG.info("Nodo creado con exito...");
             } else {
                 LOG.info("Franquiciado ya existe");
@@ -625,12 +648,12 @@ public class UsuariosRest {
     public ResponseData cambiarDireccionRed() {
         ResponseData<UsuariosDTO> response = new ResponseData<>();
         try {
-            
+
             Usuarios usuario = controller.getUsuario(usuarioLogueado.getIdUsuario());
-            
+
             usuario.setDireccionRed(usuario.getDireccionRed().equals(Constants.DIR_DERECHA) ? Constants.DIR_IZQUIERDA : Constants.DIR_DERECHA);
             em.merge(usuario);
-            
+
             UsuariosDTO usuarioObj = new UsuariosDTO();
             usuarioObj.setDireccion(usuario.getDireccionRed().equals(Constants.DIR_DERECHA) ? Constants.DIR_DERECHA_STR : Constants.DIR_IZQUIERDA_STR);
             response.setData(usuarioObj);
@@ -644,16 +667,16 @@ public class UsuariosRest {
         }
         return response;
     }
-    
+
     @Path("visualizarRed")
     @Secured
     @GET
     public String verRed() {
-        try {            
-            
+        try {
+
             LOG.info(usuarioLogueado.getUsername());
-            Persona persona = controller.getPersonaByUsername(usuarioLogueado.getUsername());            
-            
+            Persona persona = controller.getPersonaByUsername(usuarioLogueado.getUsername());
+
             String arbol = arbolController.getNodoArbol(persona.getIdPersona(), null);
 
             return arbol;

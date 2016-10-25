@@ -70,4 +70,40 @@ public class UsuariosDTO<T> {
     @Getter
     @Setter
     private String sponsor;
+    
+    @Getter
+    @Setter
+    private String genero;
+    
+    @Getter
+    @Setter
+    private String fechaNacimiento;
+    
+    @Getter
+    @Setter
+    private String nroDocumento;
+    
+    @Getter
+    @Setter
+    private String ruc;
+    
+    @Getter
+    @Setter
+    private String telefono;
+    
+    @Getter
+    @Setter
+    private String celular;
+    
+    @Getter
+    @Setter
+    private String lugarDireccion;
+    
+    @Getter
+    @Setter
+    private String ciudad;
+    
+    @Getter
+    @Setter
+    private String mail;
 }
