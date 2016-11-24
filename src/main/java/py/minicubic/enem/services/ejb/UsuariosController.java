@@ -58,9 +58,20 @@ public class UsuariosController {
         return null;
     }
 
-    public List<Usuarios> getUsuarioByUsername(String user) {
+    public List<Usuarios> getUsuarioByUsernameActivo(String user) {
         try {
             return em.createQuery("select u from Usuarios u where u.username = :user and u.estado = '" + Constants.ESTADO_ACTIVO + "' ")
+                    .setParameter("user", user)
+                    .getResultList();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ArrayList();
+        }
+    }
+    
+    public List<Usuarios> getUsuarioByUsername(String user) {
+        try {
+            return em.createQuery("select u from Usuarios u where u.username = :user ")
                     .setParameter("user", user)
                     .getResultList();
         } catch (Exception e) {
@@ -73,6 +84,41 @@ public class UsuariosController {
         try {
             return em.createQuery("select p from persona p where p.email = :email")
                     .setParameter("email", email)
+                    .getResultList();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ArrayList();
+        }
+    }
+    
+    public List<Persona> getPersonasByEmailExcludeId(String email, Long id) {
+        try {
+            return em.createQuery("select p from persona p where p.email = :email and p.usuario.idUsuario != :id")
+                    .setParameter("email", email)
+                    .setParameter("id", id)
+                    .getResultList();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ArrayList();
+        }
+    }
+    
+    public List<Persona> getPersonaByCI(Long ci) {
+        try {
+            return em.createQuery("select p from persona p where p.nroDocumento = :ci")
+                    .setParameter("ci", ci)
+                    .getResultList();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ArrayList();
+        }
+    }
+    
+    public List<Persona> getPersonaByCIExcludeId(Long ci, Long id) {
+        try {
+            return em.createQuery("select p from persona p where p.nroDocumento = :ci and p.usuario.idUsuario != :id")
+                    .setParameter("ci", ci)
+                    .setParameter("id", id)
                     .getResultList();
         } catch (Exception e) {
             e.printStackTrace();
@@ -100,7 +146,7 @@ public class UsuariosController {
 
     public List<Persona> getListPersonaUsuarios(Long idUsuario) {
         try {
-            return em.createQuery("SELECT p from persona p where p.usuario is not null and p.usuario.idUsuario != :idUsuario and p.usuario.estado != '" + Constants.ESTADO_SINCONFIRMAR + "' order by p.usuario.fechaRegistro DESC")
+            return em.createQuery("SELECT p from persona p where p.usuario is not null and p.usuario.idUsuario != :idUsuario order by p.usuario.fechaRegistro DESC")
                     .setParameter("idUsuario", idUsuario)
                     .getResultList();
         } catch (Exception e) {
@@ -244,5 +290,18 @@ public class UsuariosController {
             e.printStackTrace();
         }
         return 0;
+    }
+    
+    public boolean eliminarUsuario(String username) {
+        try {
+            em.createNativeQuery("select cast(eliminar_usuario(:username) as text)")
+                    .setParameter("username", username)
+                    .getResultList();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+        
+        return true;
     }
 }

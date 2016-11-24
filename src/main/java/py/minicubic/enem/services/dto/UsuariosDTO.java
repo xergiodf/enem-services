@@ -49,6 +49,14 @@ public class UsuariosDTO<T> {
     
     @Getter
     @Setter
+    private String nombres;
+    
+    @Getter
+    @Setter
+    private String apellidos;
+    
+    @Getter
+    @Setter
     private String nombreCompleto;
     
     @Getter

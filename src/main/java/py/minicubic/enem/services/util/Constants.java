@@ -34,7 +34,8 @@ public final class Constants {
     public static final String USER_NAME_SMTP = "noreply@enemedu.com";
     public static final String PASS_SMTP = ".NoReply.*";
     
-    public static final String BUSINESS_ENDPOINT = "http://enemedu.com/business.php?login";    
+    //public static final String BUSINESS_ENDPOINT = "http://enemedu.com/business.php?login&";    
+    public static final String BUSINESS_ENDPOINT = "http://enemedu.com/login?param";
     
     public static final Long ROL_ADMIN = 1L;
 }

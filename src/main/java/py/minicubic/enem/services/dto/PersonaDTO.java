@@ -75,5 +75,7 @@ public class PersonaDTO<T> {
     @Setter
     private String genero;
            
-
+    @Getter
+    @Setter
+    private Long idUsuario;
 }

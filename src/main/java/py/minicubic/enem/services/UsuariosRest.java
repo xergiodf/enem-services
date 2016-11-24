@@ -156,7 +156,7 @@ public class UsuariosRest {
             // Validación de Sponsor
             Persona sponsor;
             LOG.info("*** Registrando Usuario ***");
-            List<Usuarios> lista = controller.getUsuarioByUsername(dto.getSponsorUsername());
+            List<Usuarios> lista = controller.getUsuarioByUsernameActivo(dto.getSponsorUsername());
 
             if (lista.isEmpty()) {
                 LOG.warning("Sponsor invalido");
@@ -237,8 +237,16 @@ public class UsuariosRest {
 
             if (edad < 18) {
                 LOG.warning("Edad invalida...");
-                response.setCodigo(303);
+                response.setCodigo(305);
                 response.setMensaje("Edad invalida");
+                return response;
+            }
+
+            // Validación de ci
+            if (!controller.getPersonaByCI(Long.valueOf(dto.getNroDocumento())).isEmpty()) {
+                LOG.warning("CI ya existe en la base de datos");
+                response.setCodigo(306);
+                response.setMensaje("Nro. de Documento ya existe en la base de datos");
                 return response;
             }
 
@@ -299,12 +307,12 @@ public class UsuariosRest {
         return response;
     }
 
-    @Path("listanoactivos")
+    @Path("getusuario/{userId}")
     @GET
     @Secured
     @Produces(MediaType.APPLICATION_JSON)
-    public ResponseData<List<Usuarios>> getUsuariosNoActivos() {
-        ResponseData<List<Usuarios>> response = new ResponseData<>();
+    public ResponseData<PersonaDTO> getUsuarioById(@PathParam("userId") Long userId) {
+        ResponseData<PersonaDTO> response = new ResponseData<>();
         try {
 
             if (!controller.isUserAdmin(usuarioLogueado.getIdUsuario())) {
@@ -312,10 +320,27 @@ public class UsuariosRest {
                 response.setMensaje(Constants.MSG_401);
                 return response;
             }
-
+            
+            DateFormat df = new SimpleDateFormat("dd/MM/yyyy");
+            
+            Persona persona = controller.getPersonaByUsuarioId(userId); 
+            PersonaDTO dto = new PersonaDTO();
+            dto.setIdUsuario(persona.getUsuario().getIdUsuario());
+            dto.setNombres(persona.getNombres());
+            dto.setApellidos(persona.getApellidos());
+            dto.setNroDocumento(persona.getNroDocumento().toString());
+            dto.setGenero(persona.getGenero());
+            dto.setFechaNacimiento(df.format(persona.getFechaNacimiento()));
+            dto.setEmail(persona.getEmail());
+            dto.setCelular(persona.getCelular());
+            dto.setTelefono(persona.getTelefono());
+            dto.setRuc(persona.getRuc());
+            dto.setIdCiudad(persona.getCiudad().getIdCiudad().toString());
+            dto.setDireccion(persona.getDireccion());
+            
             response.setCodigo(200);
             response.setMensaje("Success");
-            response.setData(controller.getListaNoActivos());
+            response.setData(dto);
             return response;
         } catch (Exception e) {
             response.setCodigo(401);
@@ -374,6 +399,8 @@ public class UsuariosRest {
             for (Persona persona : controller.getListPersonaUsuarios(usuarioLogueado.getIdUsuario())) {
                 usuarioResponse = new UsuariosDTO();
                 usuarioResponse.setIdUsuario(persona.getUsuario().getIdUsuario());
+                usuarioResponse.setNombres(persona.getNombres());
+                usuarioResponse.setApellidos(persona.getApellidos());
                 usuarioResponse.setNombreCompleto(persona.getNombres() + " " + persona.getApellidos());
                 usuarioResponse.setActivo(persona.getUsuario().getEstado().equals("ACTIVO"));
                 usuarioResponse.setFechaRegistro(df.format(persona.getUsuario().getFechaRegistro()));
@@ -388,6 +415,10 @@ public class UsuariosRest {
                 usuarioResponse.setLugarDireccion(persona.getDireccion());
                 usuarioResponse.setCiudad(!Util.isEmpty(persona.getCiudad()) ? ciudadController.getCiudad(persona.getCiudad().getIdCiudad()).getNombre() : "");
                 usuarioResponse.setMail(persona.getEmail());
+                if (!Util.isEmpty(persona.getUsuario().getTokenConfirmacionEmail())) {
+                    String link = Constants.BUSINESS_ENDPOINT + "&tokenEmail=" + persona.getUsuario().getTokenConfirmacionEmail();
+                    usuarioResponse.setToken(link);
+                }
 
                 usuariosResponse.add(usuarioResponse);
             }
@@ -575,16 +606,24 @@ public class UsuariosRest {
             Persona personaFranquiciado = controller.getPersonaByUsuarioId(userId);
             if (Util.isEmpty(personaFranquiciado)) {
                 LOG.log(Level.WARNING, "No se encuentra usuario con id: {0}", userId);
-                response.setCodigo(305);
+                response.setCodigo(301);
                 response.setMensaje("No se encuentra usuario con id: " + userId);
                 return response;
             }
+
             Usuarios usuarioFranquiciado = personaFranquiciado.getUsuario();
+            if (Constants.ESTADO_SINCONFIRMAR.equals(usuarioFranquiciado.getEstado())) {
+                LOG.log(Level.WARNING, "El usuario {0} aún no confirmó su cuenta.", usuarioFranquiciado.getUsername());
+                response.setCodigo(302);
+                response.setMensaje("El usuario " + usuarioFranquiciado.getUsername() + "aún no confirmó su cuenta");
+                return response;
+            }
+
             Persona personaSponsor = controller.getPersona(personaFranquiciado.getIdSponsor());
 
             if (Util.isEmpty(personaSponsor)) {
                 LOG.log(Level.WARNING, "No se encuentra persona con id: {0}", personaFranquiciado.getIdSponsor());
-                response.setCodigo(305);
+                response.setCodigo(303);
                 response.setMensaje("No se encuentra persona con id: " + personaFranquiciado.getIdSponsor());
                 return response;
             }
@@ -674,7 +713,6 @@ public class UsuariosRest {
     public String verRed() {
         try {
 
-            LOG.info(usuarioLogueado.getUsername());
             Persona persona = controller.getPersonaByUsername(usuarioLogueado.getUsername());
 
             String arbol = arbolController.getNodoArbol(persona.getIdPersona(), null);
@@ -684,5 +722,148 @@ public class UsuariosRest {
             e.printStackTrace();
         }
         return "[{}]";
+    }
+
+    @Path("eliminarUsuario/{username}")
+    @GET
+    @Secured
+    @Produces(MediaType.APPLICATION_JSON)
+    public ResponseData eliminarUsuario(@PathParam(value = "username") String username) {
+        ResponseData<List<UsuariosDTO>> response = new ResponseData<>();
+        try {
+
+            LOG.log(Level.INFO, "eliminarUsuario -> {0}", username);
+
+            // Verificar que el usuarioFranquiciado logueado tiene permisos para hacer esto   
+            if (!controller.isUserAdmin(usuarioLogueado.getIdUsuario())) {
+                response.setCodigo(401);
+                response.setMensaje(Constants.MSG_401);
+                return response;
+            }
+
+            if (controller.eliminarUsuario(username)) {
+                response.setCodigo(200);
+                response.setMensaje("Usuario eliminado correctamente");
+            } else {
+                response.setCodigo(310);
+                response.setMensaje("No se pudo eliminar el usuario");
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setCodigo(401);
+            response.setMensaje("Ocurrio un error al eliminar el usuario");
+        }
+
+        return response;
+    }
+
+    @Path("editar/{userId}")
+    @POST
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public ResponseData<Usuarios> editarUsuario(PersonaDTO dto, 
+            @PathParam(value = "userId") Long userId) {
+        ResponseData<Usuarios> response = new ResponseData<>();
+        try {
+
+            // Validaciones de nulidad
+            if (dto.getNombres() == null || dto.getNombres().isEmpty() // Nombres
+                    || dto.getNroDocumento() == null || dto.getNroDocumento().isEmpty() // Nro Documento
+                    || dto.getDireccion() == null || dto.getDireccion().isEmpty() // Dirección
+                    || dto.getEmail() == null || dto.getEmail().isEmpty() // Email
+                    || dto.getFechaNacimiento() == null || dto.getFechaNacimiento().isEmpty() // Fecha Nacimiento
+                    || dto.getApellidos() == null || dto.getApellidos().isEmpty() // Apellido
+                    || dto.getGenero() == null || dto.getGenero().isEmpty()) {                  // Genero
+
+                LOG.warning("editarUsuario -> No valida nulidad");
+                response.setCodigo(301);
+                response.setMensaje("Campos requeridos: *Nombres *Nro. Documento *Direccion *Email *Password *Fecha Nacimiento *Sponsor *Apellido *Genero");
+                return response;
+            }
+
+            // Validacion de Ciudad
+            Ciudad ciudad = null;
+            if (!Util.isEmpty(dto.getIdCiudad())) {
+
+                ciudad = ciudadController.getCiudad(Long.valueOf(dto.getIdCiudad()));
+                if (ciudad == null) {
+                    LOG.warning("editarUsuario -> Ciudad invalida");
+                    response.setCodigo(302);
+                    response.setMensaje("Ciudad invalida");
+                    return response;
+                }
+            }
+
+            // Validación de email
+            if (!controller.getPersonasByEmailExcludeId(dto.getEmail(), userId).isEmpty()) {
+                LOG.warning("editarUsuario -> Email ya existe en la base de datos");
+                response.setCodigo(304);
+                response.setMensaje("Email ya existe en la base de datos");
+                return response;
+            }
+            
+            // Validación de Edad
+            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
+            Date fechaNacimiento = sdf.parse(dto.getFechaNacimiento());
+
+            GregorianCalendar now = new GregorianCalendar();
+            GregorianCalendar nacimiento = new GregorianCalendar();
+            nacimiento.setTime(fechaNacimiento);
+
+            int edad = now.get(GregorianCalendar.YEAR) - nacimiento.get(GregorianCalendar.YEAR);
+            int mesNaci = nacimiento.get(GregorianCalendar.MONTH);
+            int diaNaci = nacimiento.get(GregorianCalendar.DAY_OF_MONTH);
+            int mes = now.get(GregorianCalendar.MONTH);
+            int dia = now.get(GregorianCalendar.DAY_OF_MONTH);
+
+            if (mes > mesNaci) {
+                edad = edad + 1;
+            } else if (mes == mesNaci) {
+                if (dia >= diaNaci) {
+                    edad = edad + 1;
+                }
+            }
+
+            if (edad < 18) {
+                LOG.warning("editarUsuario -> Edad invalida");
+                response.setCodigo(305);
+                response.setMensaje("Edad invalida");
+                return response;
+            }
+
+            // Validación de ci
+            if (!controller.getPersonaByCIExcludeId(Long.valueOf(dto.getNroDocumento()), userId).isEmpty()) {
+                LOG.warning("editarUsuario -> CI ya existe en la base de datos");
+                response.setCodigo(306);
+                response.setMensaje("Nro. de Documento ya existe en la base de datos");
+                return response;
+            }
+
+            Persona persona = controller.getPersonaByUsuarioId(userId);
+            persona.setNombres(dto.getNombres());
+            persona.setNroDocumento(Long.parseLong(dto.getNroDocumento()));
+            persona.setApellidos(dto.getApellidos());
+            persona.setCelular(dto.getCelular());
+            persona.setTelefono(dto.getTelefono());
+            persona.setRuc(dto.getRuc());
+            persona.setGenero(dto.getGenero());
+            persona.setDireccion(dto.getDireccion());
+            persona.setEmail(dto.getEmail());
+            persona.setFechaNacimiento(fechaNacimiento);
+            persona.setCiudad(ciudad);
+
+            em.persist(persona);
+            LOG.log(Level.INFO, "editarUsuario -> Persona Actualizada: {0}", persona.getNombres());
+
+            response.setCodigo(200);
+            response.setMensaje("Usuario actualizado correctamente");  
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setCodigo(400);
+            response.setMensaje("Ocurrió un error en el servidor");
+        }
+        return response;
     }
 }

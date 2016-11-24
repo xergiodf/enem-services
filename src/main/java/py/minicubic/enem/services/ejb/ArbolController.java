@@ -1,13 +1,10 @@
 package py.minicubic.enem.services.ejb;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.logging.Logger;
 import javax.ejb.Stateless;
 import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
 import javax.persistence.PersistenceContext;
-import py.minicubic.enem.services.dto.ArbolDTO;
 import py.minicubic.enem.services.model.Nodo;
 import py.minicubic.enem.services.model.Persona;
 import py.minicubic.enem.services.util.Constants;
@@ -63,29 +60,31 @@ public class ArbolController {
                 // Bajamos un nivel
                 guardarNodo(idPersona, direccion, nodo.getNodoDerecha());
             }
-        } else if (Util.isEmpty(nodo.getNodoIzquierda())) {
-
-            LOG.info("Entro en nodo izquierda y guardo");
-
-            // Si el nodo derecho está vacio, agregamos ahi
-            // buscamos la persona
-            Persona persona = (Persona) em.find(Persona.class, idPersona);
-
-            //Creamos el nuevo nodo y guardamos
-            Nodo newNodo = new Nodo();
-            newNodo.setPersona(persona);
-
-            em.persist(newNodo);
-
-            // Actualizamos el nodo del sponsor
-            nodo.setNodoIzquierda(newNodo);
-            em.merge(nodo);
         } else {
+            if (Util.isEmpty(nodo.getNodoIzquierda())) {
 
-            LOG.info("Entro en nodo izquierda y sigo buscando");
+                LOG.info("Entro en nodo izquierda y guardo");
 
-            // Bajamos un nivel
-            guardarNodo(idPersona, direccion, nodo.getNodoIzquierda());
+                // Si el nodo derecho está vacio, agregamos ahi
+                // buscamos la persona
+                Persona persona = (Persona) em.find(Persona.class, idPersona);
+
+                //Creamos el nuevo nodo y guardamos
+                Nodo newNodo = new Nodo();
+                newNodo.setPersona(persona);
+
+                em.persist(newNodo);
+
+                // Actualizamos el nodo del sponsor
+                nodo.setNodoIzquierda(newNodo);
+                em.merge(nodo);
+            } else {
+
+                LOG.info("Entro en nodo izquierda y sigo buscando");
+
+                // Bajamos un nivel
+                guardarNodo(idPersona, direccion, nodo.getNodoIzquierda());
+            }
         }
     }
 
@@ -94,6 +93,10 @@ public class ArbolController {
         Nodo nodo = this.getArbolByPersona(idPersonaActual);
         Persona personaPadre = null;
         String helper = "";
+
+        if (Util.isEmpty(nodo)) {
+            LOG.info(String.valueOf(idPersonaActual));
+        }
 
         if (!Util.isEmpty(idPersonaPadre)) {
             personaPadre = (Persona) em.find(Persona.class, idPersonaPadre);

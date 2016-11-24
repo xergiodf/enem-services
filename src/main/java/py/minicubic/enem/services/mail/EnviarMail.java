@@ -70,6 +70,7 @@ public class EnviarMail {
 
         // Create the email message
         Email email = new SimpleEmail();
+        email.setCharset("UTF-8");
         email.setHostName(Constants.HOST_NAME_SMTP);
         email.setSmtpPort(465);
         email.setSSLOnConnect(true);
